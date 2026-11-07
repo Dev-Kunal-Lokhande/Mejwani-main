@@ -1,0 +1,411 @@
+﻿diff --git a/print-agent.js b/print-agent.js
+index 3b1f730..afd55ea 100644
+--- a/print-agent.js
++++ b/print-agent.js
+@@ -294,10 +294,196 @@ const compileTestPayload = (testData) => {
+ };
+ 
+ // ==========================================
+-// 4. TCP SOCKET DIRECT WRITER
++// 4. TCP SOCKET DIRECT WRITER & DISCOVERY HELPERS
+ // ==========================================
+-const sendToLocalPrinter = (buffer) => {
+-  if (CONFIG.PRINTER_MODE === 'USB') {
++let localPrinterConfig = null;
++
++const isIPv4 = (str) => {
++  if (typeof str !== 'string') return false;
++  const ip = str.split(':')[0].trim();
++  const ipPattern = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
++  const match = ip.match(ipPattern);
++  if (!match) return false;
++  return match.slice(1).every(num => {
++    const val = parseInt(num, 10);
++    return val >= 0 && val <= 255;
++  });
++};
++
++const isPrinterReachable = (ip, port = 9100) => {
++  return new Promise((resolve) => {
++    const socket = new net.Socket();
++    socket.setTimeout(2000);
++    socket.connect(port, ip, () => {
++      socket.end();
++      resolve(true);
++    });
++    socket.on('error', () => {
++      socket.destroy();
++      resolve(false);
++    });
++    socket.on('timeout', () => {
++      socket.destroy();
++      resolve(false);
++    });
++  });
++};
++
++const getWindowsPrinters = () => {
++  return new Promise((resolve) => {
++    const cmd = `powershell -Command "Get-Printer | Select-Object Name, Type, PortName | ConvertTo-Json"`;
++    exec(cmd, (err, stdout, stderr) => {
++      if (err) {
++        console.error('[Agent] Failed to list Windows printers:', stderr || err.message);
++        return resolve([]);
++      }
++      try {
++        if (!stdout || stdout.trim() === '') {
++          return resolve([]);
++        }
++        const parsed = JSON.parse(stdout);
++        const list = Array.isArray(parsed) ? parsed : [parsed].filter(Boolean);
++        resolve(list.map(p => ({
++          name: p.Name,
++          type: p.Type === 1 ? 'network' : 'usb',
++          port: p.PortName
++        })));
++      } catch (e) {
++        console.error('[Agent] Failed to parse Windows printers JSON:', e.message);
++        resolve([]);
++      }
++    });
++  });
++};
++
++const discoverPrinters = async () => {
++  const winPrinters = await getWindowsPrinters();
++  const printers = [];
++
++  // 1. Process Windows printers
++  for (const p of winPrinters) {
++    let type = 'usb';
++    let ip = null;
++    let online = true;
++
++    // Check if it's a network printer by name, port, or type
++    const ipMatch = p.port && p.port.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
++    if (ipMatch || p.type === 'network' || p.name.toLowerCase().includes('network') || p.port.startsWith('IP_')) {
++      type = 'network';
++      ip = ipMatch ? ipMatch[1] : (p.port.startsWith('IP_') ? p.port.substring(3) : p.port);
++      if (ip && ip.includes('_')) {
++        ip = ip.split('_')[0];
++      }
++      // If we extracted a valid IP, clean it up
++      if (ip && !ip.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/)) {
++        ip = null;
++      }
++      
++      const checkIp = ip || CONFIG.PRINTER_IP;
++      online = await isPrinterReachable(checkIp, 9100);
++    } else {
++      // USB printer
++      online = true;
++    }
++
++    printers.push({
++      name: p.name,
++      type: type,
++      ip: ip || undefined,
++      port: type === 'network' ? 9100 : undefined,
++      online: online
++    });
++  }
++
++  // 2. Always check and add the default configured network printer IP (CONFIG.PRINTER_IP)
++  const defaultIp = CONFIG.PRINTER_IP;
++  const alreadyHasDefault = printers.some(p => p.ip === defaultIp || p.name === defaultIp);
++  
++  if (!alreadyHasDefault) {
++    const isOnline = await isPrinterReachable(defaultIp, CONFIG.PRINTER_PORT || 9100);
++    printers.push({
++      name: defaultIp,
++      type: 'network',
++      ip: defaultIp,
++      port: CONFIG.PRINTER_PORT || 9100,
++      online: isOnline
++    });
++  }
++
++  return printers;
++};
++
++const sendToLocalPrinter = (buffer, target = null) => {
++  let isNetwork = false;
++  let ip = CONFIG.PRINTER_IP;
++  let port = CONFIG.PRINTER_PORT || 9100;
++  let shareName = CONFIG.PRINTER_SHARE_NAME;
++
++  if (target) {
++    const hasNetworkType = target.type === 'network';
++    const hasIpTarget = target.target && isIPv4(target.target);
++    const hasIpName = target.name && isIPv4(target.name);
++    const hasIpKey = target.ip && isIPv4(target.ip);
++
++    if (hasNetworkType || hasIpTarget || hasIpName || hasIpKey) {
++      isNetwork = true;
++      let rawTarget = target.ip || target.target || target.name;
++      if (typeof rawTarget === 'string') {
++        const parts = rawTarget.split(':');
++        ip = parts[0].trim();
++        if (parts[1]) {
++          port = parseInt(parts[1].trim(), 10) || 9100;
++        } else {
++          port = target.port || 9100;
++        }
++      } else {
++        ip = CONFIG.PRINTER_IP;
++        port = target.port || CONFIG.PRINTER_PORT || 9100;
++      }
++    } else {
++      isNetwork = false;
++      shareName = target.target || target.name || CONFIG.PRINTER_SHARE_NAME;
++    }
++  } else {
++    const hasConfigIp = CONFIG.PRINTER_IP && isIPv4(CONFIG.PRINTER_IP);
++    if (CONFIG.PRINTER_MODE === 'LAN' || hasConfigIp) {
++      isNetwork = true;
++      ip = CONFIG.PRINTER_IP;
++      port = CONFIG.PRINTER_PORT || 9100;
++    } else {
++      isNetwork = false;
++      shareName = CONFIG.PRINTER_SHARE_NAME;
++    }
++  }
++
++  if (isNetwork) {
++    console.log(`[Agent] Sending ESC/POS print job via TCP socket to network printer at ${ip}:${port}`);
++    return new Promise((resolve, reject) => {
++      const socket = new net.Socket();
++      socket.setTimeout(5000);
++
++      socket.connect(port, ip, () => {
++        socket.write(buffer, () => {
++          socket.end();
++        });
++      });
++
++      socket.on('close', () => {
++        resolve();
++      });
++
++      socket.on('error', (err) => {
++        socket.destroy();
++        reject(err);
++      });
++
++      socket.on('timeout', () => {
++        socket.destroy();
++        reject(new Error(`Connection timed out: ${ip}:${port}`));
++      });
++    });
++  } else {
++    console.log(`[Agent] Sending ESC/POS print job via USB spooler to local printer: ${shareName}`);
+     return new Promise((resolve, reject) => {
+       const tempFilePath = path.join(__dirname, 'temp_receipt.bin');
+       fs.writeFile(tempFilePath, buffer, (writeErr) => {
+@@ -306,7 +492,7 @@ const sendToLocalPrinter = (buffer) => {
+         }
+         
+         // Execute raw copy command to Windows print spooler
+-        const cmd = `copy /B "${tempFilePath}" "\\\\localhost\\${CONFIG.PRINTER_SHARE_NAME}"`;
++        const cmd = `copy /B "${tempFilePath}" "\\\\localhost\\${shareName}"`;
+         exec(cmd, (execErr, stdout, stderr) => {
+           // Clean up temp file
+           fs.unlink(tempFilePath, () => {});
+@@ -318,32 +504,45 @@ const sendToLocalPrinter = (buffer) => {
+         });
+       });
+     });
+-  } else {
+-    // LAN/TCP mode
+-    return new Promise((resolve, reject) => {
+-      const client = new net.Socket();
+-      client.setTimeout(5000);
+-      
+-      client.connect(CONFIG.PRINTER_PORT, CONFIG.PRINTER_IP, () => {
+-        client.write(buffer, () => {
+-          client.end();
+-          resolve();
+-        });
+-      });
+-      
+-      client.on('error', (err) => {
+-        client.destroy();
+-        reject(err);
+-      });
+-      
+-      client.on('timeout', () => {
+-        client.destroy();
+-        reject(new Error('Connection timed out'));
+-      });
+-    });
+   }
+ };
+ 
++const startLocalServer = () => {
++  const server = http.createServer(async (req, res) => {
++    // Add CORS headers
++    res.setHeader('Access-Control-Allow-Origin', '*');
++    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
++    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
++
++    if (req.method === 'OPTIONS') {
++      res.writeHead(204);
++      res.end();
++      return;
++    }
++
++    const parsedUrl = url.parse(req.url, true);
++    if (parsedUrl.pathname === '/printers') {
++      try {
++        const printers = await discoverPrinters();
++        res.writeHead(200, { 'Content-Type': 'application/json' });
++        res.end(JSON.stringify({ success: true, printers }));
++      } catch (err) {
++        console.error('[Agent] Discover printers error:', err.message);
++        res.writeHead(500, { 'Content-Type': 'application/json' });
++        res.end(JSON.stringify({ success: false, message: err.message }));
++      }
++    } else {
++      res.writeHead(404, { 'Content-Type': 'application/json' });
++      res.end(JSON.stringify({ success: false, message: 'Not Found' }));
++    }
++  });
++
++  const PORT = 9111;
++  server.listen(PORT, '0.0.0.0', () => {
++    console.log(`[Agent] Local HTTP server listening on http://localhost:${PORT} for printer discovery`);
++  });
++};
++
+ // ==========================================
+ // 5. MAIN AGENT CORE LIFE CYCLE
+ // ==========================================
+@@ -374,14 +573,73 @@ const login = async () => {
+ const sendHeartbeat = async () => {
+   if (!token) return;
+   try {
++    // Determine printer statuses
++    const printerStatus = {};
++    if (localPrinterConfig) {
++      if (localPrinterConfig.kot) {
++        const target = localPrinterConfig.kot;
++        const isNet = target.type === 'network' || isIPv4(target.target) || isIPv4(target.name) || isIPv4(target.ip);
++        if (isNet) {
++          let ip = CONFIG.PRINTER_IP;
++          let port = CONFIG.PRINTER_PORT || 9100;
++          let rawTarget = target.ip || target.target || target.name;
++          if (typeof rawTarget === 'string') {
++            const parts = rawTarget.split(':');
++            ip = parts[0].trim();
++            if (parts[1]) port = parseInt(parts[1].trim(), 10) || 9100;
++            else if (target.port) port = target.port;
++          }
++          const kotOnline = await isPrinterReachable(ip, port);
++          printerStatus.kot = kotOnline ? 'ONLINE' : 'OFFLINE';
++        } else {
++          printerStatus.kot = 'ONLINE'; // Assume local USB is ONLINE
++        }
++      } else {
++        const defaultOnline = await isPrinterReachable(CONFIG.PRINTER_IP, CONFIG.PRINTER_PORT || 9100);
++        printerStatus.kot = defaultOnline ? 'ONLINE' : 'OFFLINE';
++      }
++
++      if (localPrinterConfig.bill) {
++        const target = localPrinterConfig.bill;
++        const isNet = target.type === 'network' || isIPv4(target.target) || isIPv4(target.name) || isIPv4(target.ip);
++        if (isNet) {
++          let ip = CONFIG.PRINTER_IP;
++          let port = CONFIG.PRINTER_PORT || 9100;
++          let rawTarget = target.ip || target.target || target.name;
++          if (typeof rawTarget === 'string') {
++            const parts = rawTarget.split(':');
++            ip = parts[0].trim();
++            if (parts[1]) port = parseInt(parts[1].trim(), 10) || 9100;
++            else if (target.port) port = target.port;
++          }
++          const billOnline = await isPrinterReachable(ip, port);
++          printerStatus.bill = billOnline ? 'ONLINE' : 'OFFLINE';
++        } else {
++          printerStatus.bill = 'ONLINE'; // Assume local USB is ONLINE
++        }
++      } else {
++        const defaultOnline = await isPrinterReachable(CONFIG.PRINTER_IP, CONFIG.PRINTER_PORT || 9100);
++        printerStatus.bill = defaultOnline ? 'ONLINE' : 'OFFLINE';
++      }
++    } else {
++      const defaultOnline = await isPrinterReachable(CONFIG.PRINTER_IP, CONFIG.PRINTER_PORT || 9100);
++      printerStatus.kot = defaultOnline ? 'ONLINE' : 'OFFLINE';
++      printerStatus.bill = defaultOnline ? 'ONLINE' : 'OFFLINE';
++    }
++
+     const res = await makeRequest('POST', '/api/print-agent/heartbeat', {
+-      printerStatus: { online: true, ready: true },
+-      printerConfig: { ip: CONFIG.PRINTER_IP, port: CONFIG.PRINTER_PORT },
++      printerStatus: printerStatus,
++      printerConfig: localPrinterConfig || { ip: CONFIG.PRINTER_IP, port: CONFIG.PRINTER_PORT },
+       version: '1.0.0'
+     }, token);
+     
+     if (res.status === 200 && res.body.success) {
+-      console.log(`[Agent] Heartbeat registered. Agent is ONLINE.`);
++      console.log(`[Agent] Heartbeat registered. Agent is ONLINE. KOT Status: ${printerStatus.kot}, Bill Status: ${printerStatus.bill}`);
++      if (res.body.agent && res.body.agent.printer_config) {
++        localPrinterConfig = typeof res.body.agent.printer_config === 'string'
++          ? JSON.parse(res.body.agent.printer_config)
++          : res.body.agent.printer_config;
++      }
+     } else {
+       console.warn(`[Agent] Heartbeat rejected: ${res.body.message || 'Token expired'}`);
+       if (res.status === 401) {
+@@ -439,14 +697,40 @@ const processJob = async (job) => {
+       throw new Error(`Unsupported job type: ${job.job_type}`);
+     }
+     
+-    console.log(`[Agent] Dispatching raw ESC/POS payload (${buffer.length} bytes) to ${CONFIG.PRINTER_IP}...`);
+-    await sendToLocalPrinter(buffer);
++    let target = null;
++    if (localPrinterConfig) {
++      if (job.job_type === 'BILL') {
++        target = localPrinterConfig.bill;
++      } else if (job.job_type === 'KOT') {
++        target = localPrinterConfig.kot;
++      } else if (job.job_type === 'TEST') {
++        target = localPrinterConfig.bill || localPrinterConfig.kot;
++      }
++    }
++
++    let targetDesc;
++    if (target) {
++      const isNet = target.type === 'network' || isIPv4(target.target) || isIPv4(target.name) || isIPv4(target.ip);
++      if (isNet) {
++        let rawTarget = target.ip || target.target || target.name;
++        targetDesc = `Network:${rawTarget}`;
++      } else {
++        targetDesc = `USB:${target.name || target.target}`;
++      }
++    } else {
++      const isNet = CONFIG.PRINTER_MODE === 'LAN' || isIPv4(CONFIG.PRINTER_IP);
++      targetDesc = isNet ? `Network:${CONFIG.PRINTER_IP}:${CONFIG.PRINTER_PORT || 9100}` : `USB:${CONFIG.PRINTER_SHARE_NAME}`;
++    }
++
++    console.log(`[Agent] Dispatching raw ESC/POS payload (${buffer.length} bytes) to ${targetDesc}...`);
++    await sendToLocalPrinter(buffer, target);
+     console.log('[Agent] Print job completed successfully on hardware.');
+     
+     // Send ack back to server
+     await makeRequest('POST', '/api/print-agent/ack', {
+       jobId: job.id,
+-      status: 'PRINTED'
++      status: 'COMPLETED',
++      printed_by_agent: CONFIG.USERNAME
+     }, token);
+     console.log('[Agent] Job acknowledged to server.');
+   } catch (err) {
+@@ -481,6 +765,7 @@ const start = async () => {
+   }
+   
+   await sendHeartbeat();
++  startLocalServer();
+   
+   // Heartbeat every 15 seconds
+   setInterval(sendHeartbeat, CONFIG.HEARTBEAT_INTERVAL_MS);

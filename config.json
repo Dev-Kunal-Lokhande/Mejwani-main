@@ -1,0 +1,11 @@
+{
+  "BACKEND_URL": "https://mejwani.onrender.com",
+  "USERNAME": "admin_hotelpranav9506",
+  "PASSWORD": "MEJ9506",
+  "PRINTER_MODE": "USB",
+  "PRINTER_SHARE_NAME": "POS-80C",
+  "PRINTER_IP": "192.168.1.20",
+  "PRINTER_PORT": 9100,
+  "POLL_INTERVAL_MS": 1000,
+  "HEARTBEAT_INTERVAL_MS": 15000
+}

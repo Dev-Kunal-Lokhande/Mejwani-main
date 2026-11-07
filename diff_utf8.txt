@@ -1,0 +1,323 @@
+﻿diff --git a/backend/src/controllers/printAgentController.js b/backend/src/controllers/printAgentController.js
+index 2e6ce61..6a8657c 100644
+--- a/backend/src/controllers/printAgentController.js
++++ b/backend/src/controllers/printAgentController.js
+@@ -14,7 +14,15 @@ exports.heartbeat = async (req, res) => {
+       INSERT INTO print_agents (hotel_id, last_seen_at, status, printer_status, printer_config, version)
+       VALUES ($1, CURRENT_TIMESTAMP, 'ONLINE', $2, $3, $4)
+       ON CONFLICT (hotel_id) 
+-      DO UPDATE SET last_seen_at = CURRENT_TIMESTAMP, status = 'ONLINE', printer_status = $2, printer_config = $3, version = $4
++      DO UPDATE SET 
++        last_seen_at = CURRENT_TIMESTAMP, 
++        status = 'ONLINE', 
++        printer_status = $2, 
++        printer_config = COALESCE(
++          NULLIF(print_agents.printer_config, '{}'::jsonb),
++          $3
++        ), 
++        version = $4
+       RETURNING *, true as is_online
+     `;
+     const result = await pool.query(query, [hotelId, JSON.stringify(printerStatus), JSON.stringify(printerConfig), version]);
+@@ -26,6 +34,32 @@ exports.heartbeat = async (req, res) => {
+   }
+ };
+ 
++// POST /api/print-agent/config
++exports.updateConfig = async (req, res) => {
++  const hotelId = req.admin.hotel_id;
++  const { printerConfig } = req.body;
++
++  if (!hotelId || !printerConfig) {
++    return res.status(400).json({ success: false, message: 'Missing required parameters' });
++  }
++
++  try {
++    const query = `
++      INSERT INTO print_agents (hotel_id, last_seen_at, status, printer_config)
++      VALUES ($1, CURRENT_TIMESTAMP, 'OFFLINE', $2)
++      ON CONFLICT (hotel_id) 
++      DO UPDATE SET printer_config = $2
++      RETURNING *, (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_seen_at)) <= 60) as is_online
++    `;
++    const result = await pool.query(query, [hotelId, JSON.stringify(printerConfig)]);
++
++    return res.status(200).json({ success: true, agent: result.rows[0] });
++  } catch (err) {
++    console.error('Save printer config error:', err);
++    return res.status(500).json({ success: false, message: 'Failed to save printer configuration: ' + err.message });
++  }
++};
++
+ // GET /api/print-agent/poll
+ exports.poll = async (req, res) => {
+   const hotelId = req.admin.hotel_id;
+@@ -34,47 +68,253 @@ exports.poll = async (req, res) => {
+     return res.status(400).json({ success: false, message: 'Hotel ID not found in token' });
+   }
+ 
++  const client = await pool.connect();
+   try {
+-    const result = await pool.query(
+-      "SELECT id, job_type, payload FROM print_jobs WHERE hotel_id = $1 AND status = 'PENDING' ORDER BY created_at ASC",
+-      [hotelId]
+-    );
++    await client.query('BEGIN');
+ 
+-    return res.status(200).json({ success: true, jobs: result.rows });
++    // 1. Fetch pending jobs with retry count limit and 60-second delay using row-level locking with SKIP LOCKED
++    const selectQuery = `
++      SELECT id, job_type, payload 
++      FROM print_jobs 
++      WHERE hotel_id = $1 
++        AND status = 'PENDING' 
++        AND retry_count < 3
++        AND (last_attempt_at IS NULL OR last_attempt_at <= CURRENT_TIMESTAMP - INTERVAL '60 seconds')
++      ORDER BY created_at ASC
++      FOR UPDATE SKIP LOCKED
++    `;
++    const selectResult = await client.query(selectQuery, [hotelId]);
++    const jobs = selectResult.rows;
++
++    if (jobs.length > 0) {
++      const jobIds = jobs.map(j => j.id);
++      // 2. Atomically update status to IN_PROGRESS within the same transaction
++      const updateQuery = `
++        UPDATE print_jobs 
++        SET status = 'IN_PROGRESS' 
++        WHERE id = ANY($1)
++      `;
++      await client.query(updateQuery, [jobIds]);
++    }
++
++    // 3. Commit the transaction before returning jobs to the agent
++    await client.query('COMMIT');
++    return res.status(200).json({ success: true, jobs });
+   } catch (err) {
++    await client.query('ROLLBACK');
+     console.error('Print agent poll error:', err);
+     return res.status(500).json({ success: false, message: 'Polling failed: ' + err.message });
++  } finally {
++    client.release();
+   }
+ };
+ 
+ // POST /api/print-agent/ack
+ exports.ack = async (req, res) => {
+-  const hotelId = req.admin.hotel_id;
+-  const { jobId, status, errorMessage = null } = req.body;
++  const hotelId = req.admin?.hotel_id || req.body?.hotelId;
++  const { jobId, status, errorMessage = null, printed_by_agent = null } = req.body;
+ 
+   if (!hotelId || !jobId || !status) {
+     return res.status(400).json({ success: false, message: 'Missing required parameters' });
+   }
+ 
++  const numericHotelId = parseInt(hotelId, 10);
++  console.log('[Ack Debug] Received jobId from agent:', jobId);
++  console.log('[Ack Debug] Received hotel_id from token/request:', hotelId);
++  console.log('[Ack Debug] Parsed numericHotelId:', numericHotelId);
++
++  const client = await pool.connect();
++  try {
++    await client.query('BEGIN');
++
++    // 8. Verify that the acknowledgment API uses the correct job ID and hotel ID by locking the row.
++    const findJobQuery = `
++      SELECT id, hotel_id, status 
++      FROM print_jobs 
++      WHERE id = $1
++      FOR UPDATE
++    `;
++    const findJobResult = await client.query(findJobQuery, [jobId]);
++
++    if (findJobResult.rows.length === 0) {
++      await client.query('ROLLBACK');
++      console.log(`[Ack Error] Print job not found: ${jobId}`);
++      return res.status(404).json({ success: false, message: 'Print job not found' });
++    }
++
++    const job = findJobResult.rows[0];
++
++    // Validate that the print job belongs to the authenticated hotel
++    if (Number(job.hotel_id) !== numericHotelId) {
++      await client.query('ROLLBACK');
++      console.log(`[Ack Error] Hotel ID mismatch for job ${jobId}. Expected: ${job.hotel_id}, Received: ${numericHotelId}`);
++      return res.status(403).json({ success: false, message: 'Unauthorized: Job does not belong to this hotel' });
++    }
++
++    const statusBefore = job.status;
++
++    // 5. Add server-side protection to reject duplicate acknowledgments.
++    if (statusBefore === 'COMPLETED') {
++      await client.query('ROLLBACK');
++      console.log(`[Ack Warn] Duplicate acknowledgment rejected. Job ${jobId} is already COMPLETED.`);
++      return res.status(400).json({ success: false, message: 'Duplicate acknowledgment: Job is already COMPLETED' });
++    }
++
++    let query;
++    let params;
++    const agentId = printed_by_agent || req.admin?.username || 'local_agent';
++
++    if (status === 'COMPLETED' || status === 'PRINTED') {
++      // 2. After successful printing, the acknowledgment endpoint must update:
++      // status = COMPLETED, completed_at = NOW(), and printed_at = NOW() (for compatibility)
++      // 2. Verify the update query includes both: WHERE id = $1 AND hotel_id = $2
++      query = `
++        UPDATE print_jobs 
++        SET status = 'COMPLETED', 
++            completed_at = CURRENT_TIMESTAMP,
++            printed_at = CURRENT_TIMESTAMP, 
++            printed_by_agent = $3,
++            error_message = NULL
++        WHERE id = $1 AND hotel_id = $2
++        RETURNING status
++      `;
++      params = [jobId, numericHotelId, agentId];
++    } else if (status === 'FAILED') {
++      // Increment retry_count. Set status = FAILED if retry_count + 1 >= 3. Set last_attempt_at = CURRENT_TIMESTAMP
++      query = `
++        UPDATE print_jobs 
++        SET retry_count = retry_count + 1,
++            status = CASE WHEN retry_count + 1 >= 3 THEN 'FAILED' ELSE 'PENDING' END,
++            last_attempt_at = CURRENT_TIMESTAMP,
++            error_message = $3
++        WHERE id = $1 AND hotel_id = $2
++        RETURNING status
++      `;
++      params = [jobId, numericHotelId, errorMessage];
++    } else {
++      await client.query('ROLLBACK');
++      return res.status(400).json({ success: false, message: 'Invalid status value' });
++    }
++
++    const updateResult = await client.query(query, params);
++    const rowsUpdated = updateResult.rowCount;
++    const statusAfter = updateResult.rows[0]?.status;
++
++    // 1. Add debug logging inside the acknowledgment endpoint:
++    // * Job status before update
++    // * SQL update result row count
++    // * Job status after update
++    console.log('[Ack Debug] Job status before update:', statusBefore);
++    console.log('[Ack Debug] SQL update result row count:', rowsUpdated);
++    console.log('[Ack Debug] Job status after update:', statusAfter);
++
++    // 7. Ensure the database transaction commits before sending HTTP 200.
++    await client.query('COMMIT');
++    console.log('[Ack Debug] Transaction commit success');
++
++    // 5. Immediately after acknowledgment, perform a SELECT query and log the saved status from the database.
++    const verifyRes = await pool.query('SELECT status FROM print_jobs WHERE id = $1', [jobId]);
++    const savedStatus = verifyRes.rows[0]?.status;
++    console.log('[Ack Debug] Saved status from database:', savedStatus);
++
++    return res.status(200).json({ 
++      success: true, 
++      message: 'Job acknowledged successfully',
++      job: { id: jobId, status: statusAfter }
++    });
++  } catch (err) {
++    await client.query('ROLLBACK');
++    console.error('Print agent ack error:', err);
++    return res.status(500).json({ success: false, message: 'Acknowledgement failed: ' + err.message });
++  } finally {
++    client.release();
++  }
++};
++
++// POST /api/print-agent/clear-pending
++exports.clearPending = async (req, res) => {
++  const hotelId = req.admin.hotel_id;
++
++  if (!hotelId) {
++    return res.status(400).json({ success: false, message: 'Hotel ID not found in token' });
++  }
++
++  try {
++    const query = `
++      UPDATE print_jobs 
++      SET status = 'COMPLETED',
++          printed_at = CURRENT_TIMESTAMP,
++          error_message = 'Cleared manually by administrator'
++      WHERE hotel_id = $1 AND status IN ('PENDING', 'IN_PROGRESS')
++      RETURNING id
++    `;
++    const result = await pool.query(query, [hotelId]);
++
++    return res.status(200).json({ 
++      success: true, 
++      message: `Successfully cleared ${result.rows.length} pending/in-progress print jobs.`,
++      clearedCount: result.rows.length
++    });
++  } catch (err) {
++    console.error('Clear pending print jobs error:', err);
++    return res.status(500).json({ success: false, message: 'Failed to clear print jobs: ' + err.message });
++  }
++};
++
++// GET /api/print-agent/failed-jobs
++exports.getFailedJobs = async (req, res) => {
++  const hotelId = req.admin.hotel_id;
++
++  if (!hotelId) {
++    return res.status(400).json({ success: false, message: 'Hotel ID not found in token' });
++  }
++
++  try {
++    const query = `
++      SELECT id, job_type, created_at, error_message, retry_count
++      FROM print_jobs
++      WHERE hotel_id = $1 AND status = 'FAILED'
++      ORDER BY created_at DESC
++      LIMIT 10
++    `;
++    const result = await pool.query(query, [hotelId]);
++
++    return res.status(200).json({ success: true, jobs: result.rows });
++  } catch (err) {
++    console.error('Get failed print jobs error:', err);
++    return res.status(500).json({ success: false, message: 'Failed to retrieve failed print jobs: ' + err.message });
++  }
++};
++
++// POST /api/print-agent/retry-job
++exports.retryJob = async (req, res) => {
++  const hotelId = req.admin.hotel_id;
++  const { jobId } = req.body;
++
++  if (!hotelId || !jobId) {
++    return res.status(400).json({ success: false, message: 'Missing required parameters' });
++  }
++
+   try {
+     const query = `
+       UPDATE print_jobs 
+-      SET status = $1, 
+-          printed_at = CASE WHEN $1 = 'PRINTED' THEN CURRENT_TIMESTAMP ELSE NULL END, 
+-          error_message = $2
+-      WHERE id = $3 AND hotel_id = $4
++      SET status = 'PENDING',
++          retry_count = 0,
++          last_attempt_at = NULL,
++          error_message = NULL
++      WHERE id = $1 AND hotel_id = $2
+       RETURNING *
+     `;
+-    const result = await pool.query(query, [status, errorMessage, jobId, hotelId]);
++    const result = await pool.query(query, [jobId, hotelId]);
+ 
+     if (result.rows.length === 0) {
+       return res.status(404).json({ success: false, message: 'Print job not found' });
+     }
+ 
+-    return res.status(200).json({ success: true, job: result.rows[0] });
++    return res.status(200).json({ success: true, message: 'Job queued for retry successfully.', job: result.rows[0] });
+   } catch (err) {
+-    console.error('Print agent ack error:', err);
+-    return res.status(500).json({ success: false, message: 'Acknowledgement failed: ' + err.message });
++    console.error('Retry print job error:', err);
++    return res.status(500).json({ success: false, message: 'Failed to queue job for retry: ' + err.message });
+   }
+ };
+ 
