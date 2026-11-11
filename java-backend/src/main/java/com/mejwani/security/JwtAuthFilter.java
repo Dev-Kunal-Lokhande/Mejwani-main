@@ -40,15 +40,28 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 if (jwtUtil.validateToken(token)) {
                     String email = jwtUtil.getEmailFromToken(token);
                     String role = jwtUtil.getRoleFromToken(token);
+                    Long hotelId = jwtUtil.getHotelIdFromToken(token);
+
+                    // Try DB lookup — if not found, still authenticate using JWT claims directly
                     Optional<Admin> adminOpt = adminRepository.findByEmail(email);
+                    Object principal;
                     if (adminOpt.isPresent()) {
-                        var auth = new UsernamePasswordAuthenticationToken(
-                                adminOpt.get(),
-                                null,
-                                List.of(new SimpleGrantedAuthority("ROLE_" + role))
-                        );
-                        SecurityContextHolder.getContext().setAuthentication(auth);
+                        principal = adminOpt.get();
+                    } else {
+                        // Create a minimal Admin-like principal from JWT claims
+                        Admin jwtAdmin = new Admin();
+                        jwtAdmin.setEmail(email);
+                        jwtAdmin.setRole(role);
+                        // hotelId will be read from JWT directly in controllers — no need to set hotel entity here
+                        principal = jwtAdmin;
                     }
+
+                    var auth = new UsernamePasswordAuthenticationToken(
+                            principal,
+                            null,
+                            List.of(new SimpleGrantedAuthority("ROLE_" + role))
+                    );
+                    SecurityContextHolder.getContext().setAuthentication(auth);
                 }
             } catch (Exception ignored) {}
         }

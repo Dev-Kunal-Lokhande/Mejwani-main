@@ -32,11 +32,15 @@ public class OrderController {
         m.put("status", order.getStatus());
         m.put("payment_mode", order.getPaymentMode());
         m.put("total_amount", order.getTotalAmount());
+        m.put("grand_total", order.getTotalAmount()); // alias for frontend
         m.put("created_at", order.getCreatedAt());
+        m.put("updated_at", order.getCreatedAt());
         m.put("kot_printed_at", order.getKotPrintedAt());
         m.put("hotel_id", order.getHotel() != null ? order.getHotel().getId() : null);
         m.put("table_id", order.getTable() != null ? order.getTable().getId() : null);
         m.put("table_name", order.getTable() != null ? order.getTable().getTableName() : null);
+        // kot_number: "ORD-{id}" format expected by frontend
+        m.put("kot_number", "ORD-" + order.getId());
 
         List<Map<String, Object>> items = new ArrayList<>();
         if (order.getItems() != null) {
@@ -44,8 +48,10 @@ public class OrderController {
                 Map<String, Object> item = new HashMap<>();
                 item.put("id", oi.getId());
                 item.put("item_name", oi.getItemName());
+                item.put("name", oi.getItemName()); // alias
                 item.put("quantity", oi.getQuantity());
                 item.put("unit_price", oi.getUnitPrice());
+                item.put("price", oi.getUnitPrice()); // alias
                 item.put("printed_quantity", oi.getPrintedQuantity());
                 item.put("menu_item_id", oi.getMenuItem() != null ? oi.getMenuItem().getId() : null);
                 items.add(item);
@@ -62,7 +68,7 @@ public class OrderController {
         List<Order> orders = status != null
                 ? orderRepository.findByHotelIdAndStatus(hotelId, status)
                 : orderRepository.findByHotelIdOrderByCreatedAtDesc(hotelId);
-        return ResponseEntity.ok(orders.stream().map(this::serializeOrder).toList());
+        return ResponseEntity.ok(Map.of("success", true, "data", orders.stream().map(this::serializeOrder).toList()));
     }
 
     @Transactional(readOnly = true)
@@ -129,7 +135,7 @@ public class OrderController {
             ));
         } catch (Exception ignored) {}
 
-        return ResponseEntity.ok(Map.of("success", true, "order", serializeOrder(saved)));
+        return ResponseEntity.ok(Map.of("success", true, "data", serializeOrder(saved)));
     }
 
     // PUT /api/orders/{id}/append-items
@@ -162,7 +168,7 @@ public class OrderController {
                     ));
                 } catch (Exception ignored) {}
             }
-            return ResponseEntity.ok(Map.of("success", true, "order", serializeOrder(saved)));
+            return ResponseEntity.ok(Map.of("success", true, "data", serializeOrder(saved)));
         }).orElse(ResponseEntity.notFound().build());
     }
 
@@ -244,7 +250,7 @@ public class OrderController {
                 order.setPaymentMode(body.get("paymentMode").toString());
             }
             Order saved = orderRepository.save(order);
-            return ResponseEntity.ok(Map.of("success", true, "order", serializeOrder(saved)));
+            return ResponseEntity.ok(Map.of("success", true, "data", serializeOrder(saved)));
         }).orElse(ResponseEntity.notFound().build());
     }
 
@@ -264,7 +270,7 @@ public class OrderController {
                     ));
                 }
             } catch (Exception ignored) {}
-            return ResponseEntity.ok(Map.of("success", true, "order", serializeOrder(saved)));
+            return ResponseEntity.ok(Map.of("success", true, "data", serializeOrder(saved)));
         }).orElse(ResponseEntity.notFound().build());
     }
 
