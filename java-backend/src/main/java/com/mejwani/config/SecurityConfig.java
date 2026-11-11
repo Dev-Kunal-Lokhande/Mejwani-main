@@ -65,6 +65,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/health").permitAll()
                 // Uploaded file serving
                 .requestMatchers("/uploads/**").permitAll()
+                // Print agent — local service, no user auth needed
+                .requestMatchers("/api/print-agent/**").permitAll()
                 // Everything else needs JWT
                 .anyRequest().authenticated()
             )
