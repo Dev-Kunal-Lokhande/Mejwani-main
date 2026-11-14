@@ -13,6 +13,7 @@ import {
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { API_BASE } from '../../../shared/services/apiBase';
+import socket from '../../../shared/services/socketClient';
 
 function cn(...inputs) {
   return twMerge(clsx(inputs));
@@ -123,12 +124,35 @@ export default function KitchenDisplay() {
     const rawId = String(id).includes(':') ? String(id).split(':')[1] : id;
 
     const orderBackendStatus = visualStatus === 'cooking' ? 'PREPARING' :
-                                visualStatus === 'ready' ? 'READY' : 'SERVED';
+                               visualStatus === 'ready' ? 'READY' : 'SERVED';
     const parcelBackendStatus = visualStatus === 'cooking' ? 'preparing' :
                                 visualStatus === 'ready' ? 'ready' : 'completed';
 
     // Optimistic UI updates
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status: visualStatus } : o));
+
+    const emitOrderReadyIfNeeded = () => {
+      if (visualStatus === 'ready') {
+        const currentOrder = orders.find((o) => o.id === id);
+        const readyPayload = {
+          hotelId,
+          orderId: rawId,
+          tableName: currentOrder?.table || 'Table',
+          kotNumber: currentOrder?.kot_number || `ORD-${rawId}`,
+          status: 'READY'
+        };
+
+        // 1. Send via Socket.IO
+        socket.emit('order-ready', readyPayload);
+
+        // 2. Instant cross-tab broadcast (works immediately across browser tabs)
+        try {
+          const bc = new BroadcastChannel('mejwani_realtime_alerts');
+          bc.postMessage({ type: 'ORDER_READY', payload: readyPayload });
+          bc.close();
+        } catch (e) {}
+      }
+    };
 
     try {
       if (isParcel) {
@@ -138,7 +162,10 @@ export default function KitchenDisplay() {
           body: JSON.stringify({ status: parcelBackendStatus, hotelId: parseInt(hotelId) })
         });
         const data = await res.json();
-        if (data.success) syncKitchenOrders();
+        if (data.success) {
+          syncKitchenOrders();
+          emitOrderReadyIfNeeded();
+        }
       } else {
         const res = await fetch(`${API_BASE}/orders/${rawId}/status?hotelId=${hotelId}`, {
           method: 'PUT',
@@ -146,7 +173,10 @@ export default function KitchenDisplay() {
           body: JSON.stringify({ status: orderBackendStatus, hotelId: parseInt(hotelId) })
         });
         const data = await res.json();
-        if (data.success) syncKitchenOrders();
+        if (data.success) {
+          syncKitchenOrders();
+          emitOrderReadyIfNeeded();
+        }
       }
     } catch (err) {
       console.error('Failed to sync cooking status:', err);

@@ -35,35 +35,43 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
+            String token = authHeader.substring(7).trim();
             try {
                 if (jwtUtil.validateToken(token)) {
                     String email = jwtUtil.getEmailFromToken(token);
-                    String role = jwtUtil.getRoleFromToken(token);
-                    Long hotelId = jwtUtil.getHotelIdFromToken(token);
+                    String role = null;
+                    try {
+                        role = jwtUtil.getRoleFromToken(token);
+                    } catch (Exception ignored) {}
 
-                    // Try DB lookup — if not found, still authenticate using JWT claims directly
-                    Optional<Admin> adminOpt = adminRepository.findByEmail(email);
+                    if (role == null || role.isBlank()) {
+                        role = "ADMIN";
+                    }
+                    String authority = role.startsWith("ROLE_") ? role : "ROLE_" + role;
+
+                    Optional<Admin> adminOpt = (email != null) ? adminRepository.findByEmail(email) : Optional.empty();
                     Object principal;
                     if (adminOpt.isPresent()) {
                         principal = adminOpt.get();
                     } else {
-                        // Create a minimal Admin-like principal from JWT claims
                         Admin jwtAdmin = new Admin();
                         jwtAdmin.setEmail(email);
                         jwtAdmin.setRole(role);
-                        // hotelId will be read from JWT directly in controllers — no need to set hotel entity here
                         principal = jwtAdmin;
                     }
 
                     var auth = new UsernamePasswordAuthenticationToken(
                             principal,
                             null,
-                            List.of(new SimpleGrantedAuthority("ROLE_" + role))
+                            List.of(new SimpleGrantedAuthority(authority))
                     );
                     SecurityContextHolder.getContext().setAuthentication(auth);
+                } else {
+                    System.out.println("[JwtAuthFilter] Invalid or expired token for: " + request.getRequestURI());
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                System.err.println("[JwtAuthFilter] Auth error on " + request.getRequestURI() + ": " + e.getMessage());
+            }
         }
         filterChain.doFilter(request, response);
     }

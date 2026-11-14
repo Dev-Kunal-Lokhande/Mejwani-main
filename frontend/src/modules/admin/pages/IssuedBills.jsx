@@ -14,11 +14,11 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axios from 'axios';
-import { API_BASE } from '../../../shared/services/apiBase';
+import { API_BASE, authorizedFetch } from '../../../shared/services/apiBase';
 import { getCachedSystemSettings } from '../../../shared/services/systemSettings';
 import socket from '../../../shared/services/socketClient';
 import AdminLayout from '../../../shared/layouts/AdminLayout';
-import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from '../../../utils/dateFormatter';
+import { formatDateDDMMYYYY } from '../../../utils/dateFormatter';
 
 export default function IssuedBills() {
   const [issuedBills, setIssuedBills] = useState([]);
@@ -32,14 +32,35 @@ export default function IssuedBills() {
   const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
   const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '1';
 
+  const getAuthConfig = () => {
+    const token = localStorage.getItem('mejwani_admin_jwt');
+    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+  };
+
+  const getTableLabel = (bill) => {
+    if (bill.table_name && bill.table_name !== 'Table null') return bill.table_name;
+    if (bill.table_id) return `Table ${bill.table_id}`;
+    return 'Parcel / Direct';
+  };
+
+  const getBillTotal = (bill) => {
+    const storedTotal = Number(bill.grand_total || bill.grandTotal || bill.total_amount || 0);
+    if (storedTotal > 0) return storedTotal;
+    return (bill.items || []).reduce(
+      (sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || item.qty || 1)),
+      0
+    );
+  };
+
   // Fetch all orders/bills
   const fetchIssuedBills = useCallback(async () => {
     try {
       setLoadingBills(true);
-      const res = await axios.get(`${API_BASE}/orders?hotelId=${hotelId}`);
+      const res = await axios.get(`${API_BASE}/orders?hotelId=${hotelId}`, getAuthConfig());
       if (res.data?.success) {
-        // Filter completed bills and cancelled completed bills (deleted)
-        const bills = (res.data.data || []).filter(o => o.status === 'COMPLETED' || (o.status === 'CANCELLED' && o.completed_at));
+        const bills = (res.data.data || []).filter(
+          o => o.status === 'COMPLETED' || (o.status === 'CANCELLED' && o.completed_at)
+        );
         setIssuedBills(bills);
       }
     } catch (err) {
@@ -54,9 +75,8 @@ export default function IssuedBills() {
   const fetchReprintRequests = useCallback(async () => {
     try {
       setLoadingRequests(true);
-      const res = await axios.get(`${API_BASE}/bills/reprint-requests?hotelId=${hotelId}`);
+      const res = await axios.get(`${API_BASE}/bills/reprint-requests?hotelId=${hotelId}`, getAuthConfig());
       if (res.data?.success) {
-        // Filter only pending requests
         const pending = (res.data.data || []).filter(r => r.status === 'PENDING');
         setReprintRequests(pending);
       }
@@ -68,15 +88,15 @@ export default function IssuedBills() {
     }
   }, [hotelId]);
 
-  // Handle reprint (sends printed command to printer and resolves request if applicable)
+  // Handle reprint
   const handleReprintBill = async (order, requestResolveId = null) => {
     const dateStr = formatDateDDMMYYYY(new Date());
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
-    const subtotalValue = Number(order.subtotal) || 0;
+    const subtotalValue = Number(order.subtotal) || getBillTotal(order);
     const cgstValue = Number(order.cgst) || 0;
     const sgstValue = Number(order.sgst) || 0;
-    const grandTotalValue = Number(order.grand_total) || 0;
+    const grandTotalValue = getBillTotal(order);
     const serviceChargeValue = Math.max(0, grandTotalValue - subtotalValue - cgstValue - sgstValue);
 
     const billData = {
@@ -84,8 +104,8 @@ export default function IssuedBills() {
       address: systemSettings.branding?.address || '',
       phone: systemSettings.branding?.phone || '',
       gstNumber: systemSettings.billing?.gstNumber || '',
-      tableNumber: order.table_name || `Table ${order.table_id}`,
-      cashierName: "Counter",
+      tableNumber: getTableLabel(order),
+      cashierName: 'Counter',
       captainName: order.captain_name || 'ADMIN',
       orderId: `ORD-${order.id}`,
       dateTime: `${dateStr} ${timeStr}`,
@@ -99,44 +119,25 @@ export default function IssuedBills() {
       sgstRate: Number(systemSettings.billing?.sgst) || 0,
       serviceChargeRate: Number(systemSettings.billing?.serviceCharge) || 0,
       currencySymbol: systemSettings.billing?.currencySymbol || 'Rs.',
-      isDuplicate: true // Trigger duplicate copy header print
+      isDuplicate: true
     };
 
     try {
-      const response = await fetch(`${API_BASE}/bills/print?hotelId=${hotelId}`, {
+      const response = await authorizedFetch(`${API_BASE}/bills/print?hotelId=${hotelId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(billData)
       });
       const data = await response.json();
       if (data.success) {
-        toast.success(`✅ Duplicate bill printing dispatched successfully.`);
+        toast.success('✅ Duplicate bill printing dispatched successfully.');
 
-        // Call print agent direct fallback if on local network
-        const isLocalHost = window.location.hostname === 'localhost' || 
-                            window.location.hostname === '127.0.0.1' || 
-                            window.location.hostname.startsWith('192.168.') || 
-                            window.location.hostname.startsWith('10.') || 
-                            window.location.hostname.startsWith('172.') || 
-                            window.location.hostname.endsWith('.local');
-        if (isLocalHost) {
-          try {
-            await fetch('http://127.0.0.1:9111/print', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id: data.jobId, job_type: 'BILL', payload: billData })
-            });
-            fetch('http://127.0.0.1:9111/trigger-poll').catch(() => { });
-          } catch (e) {
-            // silent local fallback error
-          }
-        }
-
-        // If resolving a captain request
         if (requestResolveId) {
-          await axios.post(`${API_BASE}/bills/reprint-requests/${requestResolveId}/resolve`, {
-            status: 'PRINTED'
-          });
+          await axios.post(
+            `${API_BASE}/bills/reprint-requests/${requestResolveId}/resolve`,
+            { status: 'PRINTED' },
+            getAuthConfig()
+          );
           fetchReprintRequests();
         }
       } else {
@@ -151,9 +152,11 @@ export default function IssuedBills() {
   // Reject reprint request
   const handleRejectRequest = async (requestId) => {
     try {
-      const res = await axios.post(`${API_BASE}/bills/reprint-requests/${requestId}/resolve`, {
-        status: 'REJECTED'
-      });
+      const res = await axios.post(
+        `${API_BASE}/bills/reprint-requests/${requestId}/resolve`,
+        { status: 'REJECTED' },
+        getAuthConfig()
+      );
       if (res.data?.success) {
         toast.success('Reprint request rejected.');
         fetchReprintRequests();
@@ -171,7 +174,7 @@ export default function IssuedBills() {
     }
 
     try {
-      const res = await axios.delete(`${API_BASE}/bills/${billId}`);
+      const res = await axios.delete(`${API_BASE}/bills/${billId}`, getAuthConfig());
       if (res.data?.success) {
         toast.success(`✅ Bill #${billId} deleted successfully.`);
         fetchIssuedBills();
@@ -192,7 +195,6 @@ export default function IssuedBills() {
     const handleNewReprintRequest = (newRequest) => {
       toast('🔔 New bill reprint request received!', { icon: '📄' });
       setReprintRequests(prev => {
-        // Avoid duplicate additions
         if (prev.some(r => r.id === newRequest.id)) return prev;
         return [newRequest, ...prev];
       });
@@ -224,7 +226,7 @@ export default function IssuedBills() {
 
     return (
       (bill.kot_number || '').toLowerCase().includes(search) ||
-      (bill.table_name || `Table ${bill.table_id}`).toLowerCase().includes(search) ||
+      getTableLabel(bill).toLowerCase().includes(search) ||
       (bill.captain_name || '').toLowerCase().includes(search) ||
       String(bill.id).includes(search)
     );
@@ -308,20 +310,21 @@ export default function IssuedBills() {
                     <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                       {filteredBills.map(bill => {
                         const isDeleted = bill.status === 'CANCELLED';
+                        const totalAmt = getBillTotal(bill);
                         return (
                           <tr key={bill.id} className={`text-slate-700 dark:text-slate-300 hover:bg-slate-50/50 dark:hover:bg-white/5 transition-all ${isDeleted ? 'opacity-60 bg-red-500/[0.02]' : ''}`}>
                             <td className="px-6 py-4.5 font-mono text-xs font-bold text-slate-900 dark:text-white">#{bill.id}</td>
-                            <td className="px-6 py-4.5 text-sm font-semibold">{bill.table_name || `Table ${bill.table_id}`}</td>
-                            <td className="px-6 py-4.5 text-xs font-bold text-slate-400">{bill.kot_number}</td>
+                            <td className="px-6 py-4.5 text-sm font-semibold">{getTableLabel(bill)}</td>
+                            <td className="px-6 py-4.5 text-xs font-bold text-slate-400">{bill.kot_number || '-'}</td>
                             <td className="px-6 py-4.5 text-sm font-semibold flex items-center gap-1.5">
                               <User className="w-3.5 h-3.5 text-slate-400" />
-                              {bill.captain_name}
+                              {bill.captain_name || 'ADMIN'}
                             </td>
                             <td className="px-6 py-4.5 text-sm font-black">
                               {isDeleted ? (
-                                <span className="line-through text-slate-400">₹{parseFloat(bill.grand_total).toFixed(0)}</span>
+                                <span className="line-through text-slate-400">₹{totalAmt.toFixed(0)}</span>
                               ) : (
-                                <span className="text-orange-500">₹{parseFloat(bill.grand_total).toFixed(0)}</span>
+                                <span className="text-orange-500">₹{totalAmt.toFixed(0)}</span>
                               )}
                             </td>
                             <td className="px-6 py-4.5 text-right flex items-center justify-end gap-2">
@@ -396,14 +399,14 @@ export default function IssuedBills() {
                       <div className="flex justify-between items-start">
                         <div>
                           <span className="text-xs font-bold text-slate-900 dark:text-white block">
-                            {req.table_name}
+                            {getTableLabel(req)}
                           </span>
                           <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">
                             KOT: {req.kot_number} • Capt: {req.captain_name}
                           </span>
                         </div>
                         <span className="text-sm font-black text-orange-500">
-                          ₹{parseFloat(req.grand_total).toFixed(0)}
+                          ₹{getBillTotal(req).toFixed(0)}
                         </span>
                       </div>
                       
@@ -468,15 +471,15 @@ export default function IssuedBills() {
 
               <div className="flex justify-between">
                 <span>Invoice: ORD-{selectedBill.id}</span>
-                <span>Table: {selectedBill.table_name || `Table ${selectedBill.table_id}`}</span>
+                <span>Table: {getTableLabel(selectedBill)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Date: {formatDateDDMMYYYY(selectedBill.created_at)}</span>
                 <span>Time: {new Date(selectedBill.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
               </div>
               <div className="flex justify-between">
-                <span>KOT: {selectedBill.kot_number}</span>
-                <span>Capt: {selectedBill.captain_name}</span>
+                <span>KOT: {selectedBill.kot_number || '-'}</span>
+                <span>Capt: {selectedBill.captain_name || 'ADMIN'}</span>
               </div>
 
               <div className="border-t border-dashed border-slate-200 dark:border-white/10 my-2" />
@@ -490,8 +493,8 @@ export default function IssuedBills() {
                 </div>
                 <div className="border-t border-slate-100 dark:border-white/5 my-1" />
                 {selectedBill.items?.map((item, index) => {
-                  const qty = item.quantity || item.qty || 1;
-                  const price = item.price || 0;
+                  const qty = Number(item.quantity || item.qty || 1);
+                  const price = Number(item.price || 0);
                   return (
                     <div key={index} className="flex justify-between text-slate-600 dark:text-slate-400">
                       <span className="w-3/5 uppercase truncate">{item.name}</span>
@@ -507,7 +510,7 @@ export default function IssuedBills() {
               {/* Financials */}
               <div className="flex justify-between">
                 <span>Subtotal</span>
-                <span>₹{parseFloat(selectedBill.subtotal || '0').toFixed(2)}</span>
+                <span>₹{Number(selectedBill.subtotal || getBillTotal(selectedBill)).toFixed(2)}</span>
               </div>
               {parseFloat(selectedBill.cgst || '0') > 0 && (
                 <div className="flex justify-between">
@@ -526,7 +529,7 @@ export default function IssuedBills() {
 
               <div className="flex justify-between text-sm font-black text-slate-900 dark:text-white">
                 <span>GRAND TOTAL</span>
-                <span className="text-orange-500">₹{parseFloat(selectedBill.grand_total || '0').toFixed(0)}</span>
+                <span className="text-orange-500">₹{getBillTotal(selectedBill).toFixed(0)}</span>
               </div>
             </div>
 

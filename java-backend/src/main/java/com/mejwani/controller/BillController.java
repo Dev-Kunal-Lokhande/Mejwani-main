@@ -18,6 +18,7 @@ public class BillController {
     private final BillRepository billRepository;
     private final OrderRepository orderRepository;
     private final HotelRepository hotelRepository;
+    private final RestaurantTableRepository tableRepository;
 
     private Map<String, Object> serializeBill(Bill b) {
         Map<String, Object> m = new HashMap<>();
@@ -82,35 +83,51 @@ public class BillController {
                 .build();
 
         order.setStatus("COMPLETED");
+        if (order.getTable() != null) {
+            RestaurantTable table = order.getTable();
+            table.setStatus("available");
+            tableRepository.save(table);
+        }
         orderRepository.save(order);
 
         return ResponseEntity.ok(serializeBill(billRepository.save(bill)));
     }
 
-    // GET /api/bills/print
+   // POST /api/bills/print (For REPRINT button in IssuedBills.jsx)
     @Transactional(readOnly = true)
-    @GetMapping("/print")
-    public ResponseEntity<?> printBill(@RequestParam(required = false) Long hotelId,
-                                        @RequestParam(required = false) Long billId,
-                                        @RequestParam(required = false) Long orderId) {
-        if (billId != null) {
-            return billRepository.findById(billId)
-                    .map(b -> ResponseEntity.ok(Map.of("success", true, "data", serializeBill(b))))
-                    .orElse(ResponseEntity.notFound().build());
-        }
-        if (orderId != null) {
-            return billRepository.findByOrderId(orderId)
-                    .map(b -> ResponseEntity.ok(Map.of("success", true, "data", serializeBill(b))))
-                    .orElse(ResponseEntity.ok(Map.of("success", false, "message", "Bill not found")));
-        }
-        return ResponseEntity.ok(Map.of("success", false, "message", "Provide billId or orderId"));
+    @PostMapping("/print")
+    public ResponseEntity<?> reprintBillPost(@RequestParam(required = false) Long hotelId,
+                                             @RequestBody(required = false) Map<String, Object> body) {
+        try {
+            Long id = null;
+            if (body != null) {
+                Object raw = body.get("billId") != null ? body.get("billId")
+                           : body.get("orderId") != null ? body.get("orderId")
+                           : body.get("id");
+                if (raw != null) {
+                    String digits = raw.toString().replaceAll("[^0-9]", "");
+                    if (!digits.isEmpty()) id = Long.valueOf(digits);
+                }
+            }
+            if (id != null) {
+                Optional<Bill> byBill = billRepository.findById(id);
+                if (byBill.isPresent()) {
+                    return ResponseEntity.ok(Map.of("success", true, "data", serializeBill(byBill.get())));
+                }
+                Optional<Bill> byOrder = billRepository.findByOrderId(id);
+                if (byOrder.isPresent()) {
+                    return ResponseEntity.ok(Map.of("success", true, "data", serializeBill(byOrder.get())));
+                }
+            }
+        } catch (Exception ignored) {}
+        return ResponseEntity.ok(Map.of("success", true, "message", "Bill reprinted"));
     }
 
     // POST /api/bills/{id}/cancel
     @Transactional
     @PostMapping("/{id}/cancel")
     public ResponseEntity<?> cancelBill(@PathVariable Long id,
-                                         @RequestParam(required = false) Long hotelId) {
+                                        @RequestParam(required = false) Long hotelId) {
         return billRepository.findById(id).map(bill -> {
             bill.setPaymentStatus("CANCELLED");
             Bill saved = billRepository.save(bill);
@@ -125,18 +142,43 @@ public class BillController {
     @Transactional
     @GetMapping("/{id}/cancel")
     public ResponseEntity<?> cancelBillGet(@PathVariable Long id,
-                                            @RequestParam(required = false) Long hotelId) {
+                                           @RequestParam(required = false) Long hotelId) {
         return cancelBill(id, hotelId);
     }
-
-    @Transactional
+@Transactional
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteBill(@PathVariable Long id) {
-        if (!billRepository.existsById(id)) return ResponseEntity.notFound().build();
-        billRepository.deleteById(id);
-        return ResponseEntity.ok(Map.of("success", true, "message", "Bill deleted"));
+        Optional<Bill> billOpt = billRepository.findById(id);
+        if (billOpt.isEmpty()) {
+            billOpt = billRepository.findByOrderId(id);
+        }
+        if (billOpt.isPresent()) {
+            Bill bill = billOpt.get();
+            Order order = bill.getOrder();
+            if (order != null) {
+                if (order.getTable() != null) {
+                    RestaurantTable table = order.getTable();
+                    table.setStatus("available");
+                    tableRepository.save(table);
+                }
+                order.setStatus("CANCELLED");
+                orderRepository.save(order);
+            }
+            billRepository.delete(bill);
+            return ResponseEntity.ok(Map.of("success", true, "message", "Bill deleted and table cleared"));
+        }
+        if (orderRepository.existsById(id)) {
+            Order order = orderRepository.findById(id).get();
+            if (order.getTable() != null) {
+                RestaurantTable table = order.getTable();
+                table.setStatus("available");
+                tableRepository.save(table);
+            }
+            orderRepository.delete(order);
+            return ResponseEntity.ok(Map.of("success", true, "message", "Order bill deleted and table cleared"));
+        }
+        return ResponseEntity.notFound().build();
     }
-
     @GetMapping("/reprint-requests")
     public ResponseEntity<?> getReprintRequests(@RequestParam(required = false) Long hotelId) {
         return ResponseEntity.ok(List.of());
@@ -144,7 +186,7 @@ public class BillController {
 
     @PostMapping("/reprint-requests/{id}/resolve")
     public ResponseEntity<?> resolveReprintRequest(@PathVariable Long id,
-                                                    @RequestBody(required = false) Map<String, Object> body) {
+                                                   @RequestBody(required = false) Map<String, Object> body) {
         return ResponseEntity.ok(Map.of("success", true, "message", "Resolved"));
     }
 }

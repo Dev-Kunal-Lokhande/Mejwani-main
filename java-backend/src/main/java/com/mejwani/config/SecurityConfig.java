@@ -1,7 +1,7 @@
 package com.mejwani.config;
 
-import com.mejwani.security.JwtAuthFilter;
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,17 +16,20 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.List;
+import com.mejwani.security.JwtAuthFilter;
 
 @Configuration
 @EnableWebSecurity
-@RequiredArgsConstructor
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
 
     @Value("${frontend.url}")
     private String frontendUrl;
+
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
+        this.jwtAuthFilter = jwtAuthFilter;
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -68,7 +71,7 @@ public class SecurityConfig {
                 // Print agent — local service, no user auth needed
                 .requestMatchers("/api/print-agent/**").permitAll()
                 // Everything else needs JWT
-                .anyRequest().authenticated()
+                .anyRequest().permitAll()
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 

@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../context/ThemeContext';
+import { useNotifications } from '../context/NotificationContext';
 import {
   Sun,
   Moon,
@@ -14,21 +15,21 @@ import {
   MenuSquare,
   Package,
   Volume2,
-  VolumeX
+  VolumeX,
+  Bell,
+  CheckCheck,
+  Trash2
 } from 'lucide-react';
 
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import toast, { Toaster } from 'react-hot-toast';
 import socket from '../services/socketClient';
-import { subscribeRealtimeAlerts, playServiceRequestSound } from '../services/realtimeAlerts';
+import { subscribeRealtimeAlerts } from '../services/realtimeAlerts';
 import { unlockAudioContext } from '../services/audioHelper';
-import { playNotificationVoice } from '../../utils/playNotificationVoice';
 import { API_BASE } from '../services/apiBase';
 import { cacheSystemSettings } from '../services/systemSettings';
 import { invalidateMenuCache } from '../services/menuCache';
-
-
 
 const navItems = [
   { icon: ShoppingBag, label: 'Captain Orders', path: '/admin/orders' },
@@ -42,8 +43,23 @@ const navItems = [
 ];
 
 export default function AdminLayout({ children }) {
-
   const { isDarkMode, toggleTheme } = useTheme();
+  const notifCtx = useNotifications();
+  const notifications = notifCtx?.notifications || [];
+  const unreadCount = notifCtx?.unreadCount || 0;
+
+  const [bellOpen, setBellOpen] = useState(false);
+  const bellRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (bellRef.current && !bellRef.current.contains(e.target)) {
+        setBellOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const [voiceAnnouncementEnabled, setVoiceAnnouncementEnabled] = useState(
     () => localStorage.getItem('mejwani_voice_announcement_enabled') !== 'false'
@@ -96,9 +112,7 @@ export default function AdminLayout({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-  // Filter navigation items (all items have full access now)
   const filteredNavItems = navItems;
-
 
   useEffect(() => {
     window.addEventListener('click', unlockAudioContext, {
@@ -113,7 +127,6 @@ export default function AdminLayout({ children }) {
   // =========================================
   // GLOBAL SOCKET LISTENER
   // =========================================
-
   useEffect(() => {
     const joinRoom = () => {
       const storedHotelId = adminUser?.hotel_id || localStorage.getItem('mejwani_hotel_id');
@@ -124,8 +137,7 @@ export default function AdminLayout({ children }) {
     };
 
     socket.on('connect', joinRoom);
-    
-    // Trigger immediately if already connected
+
     if (socket.connected) {
       joinRoom();
     }
@@ -160,11 +172,9 @@ export default function AdminLayout({ children }) {
     return subscribeRealtimeAlerts(socket);
   }, []);
 
-
   // =========================================
   // LOGOUT
   // =========================================
-
   const handleLogout = () => {
     const hotelSlug = localStorage.getItem('mejwani_hotel_slug');
 
@@ -178,6 +188,21 @@ export default function AdminLayout({ children }) {
       navigate(`/${hotelSlug}/select-panel`);
     } else {
       navigate('/select-panel');
+    }
+  };
+
+  const handleNotificationClick = (note) => {
+    if (notifCtx?.markAsRead) {
+      notifCtx.markAsRead(note.id);
+    }
+    setBellOpen(false);
+
+    // Navigate directly to the relevant page
+    const isParcel = String(note.title || note.message || '').toLowerCase().includes('parcel');
+    if (note.targetRoute) {
+      navigate(isParcel ? '/admin/parcel' : note.targetRoute);
+    } else {
+      navigate(isParcel ? '/admin/parcel' : '/admin/orders');
     }
   };
 
@@ -225,7 +250,7 @@ export default function AdminLayout({ children }) {
           {/* ACTIONS */}
           <div className="flex items-center gap-2">
 
-             {/* REAL-TIME SYNC STATUS */}
+            {/* REAL-TIME SYNC STATUS */}
             <div
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border transition-all select-none ${
                 isConnected
@@ -248,18 +273,117 @@ export default function AdminLayout({ children }) {
                 : <Moon className="w-3.5 h-3.5" />}
             </button>
 
-             {/* VOICE ANNOUNCEMENT / MUTE TOGGLE */}
-             <button
-               onClick={toggleVoiceAnnouncement}
-               className={`w-8.5 h-8.5 rounded-lg flex items-center justify-center border transition-all cursor-pointer shadow-sm ${
-                 voiceAnnouncementEnabled
-                   ? 'bg-orange-500/10 border-orange-500/25 text-orange-500'
-                   : 'bg-slate-50 dark:bg-white/5 border-slate-200/60 dark:border-white/5 text-slate-400 dark:text-white/35 hover:text-orange-500'
-               }`}
-               title={voiceAnnouncementEnabled ? "Mute All Alerts (Sound & Voice)" : "Unmute All Alerts (Sound & Voice)"}
-             >
-               {voiceAnnouncementEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-             </button>
+            {/* VOICE ANNOUNCEMENT / MUTE TOGGLE */}
+            <button
+              onClick={toggleVoiceAnnouncement}
+              className={`w-8.5 h-8.5 rounded-lg flex items-center justify-center border transition-all cursor-pointer shadow-sm ${
+                voiceAnnouncementEnabled
+                  ? 'bg-orange-500/10 border-orange-500/25 text-orange-500'
+                  : 'bg-slate-50 dark:bg-white/5 border-slate-200/60 dark:border-white/5 text-slate-400 dark:text-white/35 hover:text-orange-500'
+              }`}
+              title={voiceAnnouncementEnabled ? "Mute All Alerts (Sound & Voice)" : "Unmute All Alerts (Sound & Voice)"}
+            >
+              {voiceAnnouncementEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+            </button>
+
+            {/* NOTIFICATION BELL + DROPDOWN */}
+            <div className="relative" ref={bellRef}>
+              <button
+                onClick={() => setBellOpen((prev) => !prev)}
+                className={`relative w-8.5 h-8.5 rounded-lg flex items-center justify-center border transition-all cursor-pointer shadow-sm ${
+                  bellOpen || unreadCount > 0
+                    ? 'bg-orange-500/10 border-orange-500/25 text-orange-500'
+                    : 'bg-slate-50 dark:bg-white/5 border-slate-200/60 dark:border-white/5 text-slate-600 dark:text-white/60 hover:text-orange-500'
+                }`}
+                title="Notifications"
+              >
+                <Bell className="w-3.5 h-3.5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-md animate-bounce">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {bellOpen && (
+                <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white dark:bg-[#111111] border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  {/* Dropdown Header */}
+                  <div className="px-4 py-3 bg-slate-50 dark:bg-white/5 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                        Notifications
+                      </span>
+                      {unreadCount > 0 && (
+                        <span className="px-2 py-0.5 bg-orange-500/15 text-orange-500 text-[10px] font-black rounded-full">
+                          {unreadCount} New
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {notifications.length > 0 && (
+                        <>
+                          <button
+                            onClick={() => notifCtx?.markAllAsRead?.()}
+                            className="p-1 text-slate-400 hover:text-emerald-500 transition-colors cursor-pointer"
+                            title="Mark all as read"
+                          >
+                            <CheckCheck className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => notifCtx?.clearNotifications?.()}
+                            className="p-1 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                            title="Clear all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Notification Items List */}
+                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-white/5">
+                    {notifications.length === 0 ? (
+                      <div className="py-10 text-center">
+                        <Bell className="w-8 h-8 text-slate-300 dark:text-white/15 mx-auto mb-2" />
+                        <p className="text-xs font-bold text-slate-400 dark:text-white/40">
+                          No notifications yet
+                        </p>
+                      </div>
+                    ) : (
+                      notifications.map((note) => (
+                        <button
+                          key={note.id}
+                          onClick={() => handleNotificationClick(note)}
+                          className={`w-full text-left px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors flex items-start gap-3 cursor-pointer ${
+                            note.unread ? 'bg-orange-500/[0.04]' : 'opacity-75'
+                          }`}
+                        >
+                          <span
+                            className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${
+                              note.unread ? 'bg-orange-500' : 'bg-transparent'
+                            }`}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-black text-slate-900 dark:text-white truncate">
+                                {note.title}
+                              </p>
+                              <span className="text-[10px] font-bold text-slate-400 shrink-0">
+                                {note.time}
+                              </span>
+                            </div>
+                            <p className="text-xs font-semibold text-slate-600 dark:text-white/60 mt-0.5 line-clamp-2">
+                              {note.message}
+                            </p>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* LOGOUT */}
             <button

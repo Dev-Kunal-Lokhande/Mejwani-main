@@ -97,15 +97,15 @@ public class StaffController {
         ));
     }
 
-    // POST /api/staff
+ // POST /api/staff
     @PostMapping
     public ResponseEntity<?> addStaff(@RequestBody Map<String, Object> body,
                                       jakarta.servlet.http.HttpServletRequest request) {
         try {
-            // hotelId from body or from JWT token directly
             Long hotelId = null;
-            if (body.containsKey("hotelId") && body.get("hotelId") != null) {
-                hotelId = Long.valueOf(body.get("hotelId").toString());
+            Object rawHotelId = body.get("hotelId") != null ? body.get("hotelId") : body.get("hotel_id");
+            if (rawHotelId != null && !rawHotelId.toString().isBlank()) {
+                hotelId = Long.valueOf(rawHotelId.toString());
             } else {
                 try {
                     String authHeader = request.getHeader("Authorization");
@@ -114,24 +114,67 @@ public class StaffController {
                     }
                 } catch (Exception ignored) {}
             }
-            if (hotelId == null) return ResponseEntity.badRequest().body(Map.of("success", false, "message", "hotelId required"));
+            if (hotelId == null) {
+                return ResponseEntity.badRequest().body(Map.of("success", false, "message", "hotelId required"));
+            }
             Hotel hotel = hotelRepository.findById(hotelId).orElseThrow(() -> new RuntimeException("Hotel not found"));
 
+            Object rawName = body.get("name") != null ? body.get("name")
+                    : (body.get("fullName") != null ? body.get("fullName") : body.get("full_name"));
+            if (rawName == null || rawName.toString().isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Staff name is required"));
+            }
+            String staffName = rawName.toString().trim();
+
+            Object rawPhone = body.get("phone") != null ? body.get("phone")
+                    : (body.get("phoneNumber") != null ? body.get("phoneNumber") : body.get("phone_number"));
+            String staffPhone = (rawPhone != null && !rawPhone.toString().isBlank()) ? rawPhone.toString().trim() : null;
+
+            String staffRole = (body.get("role") != null && !body.get("role").toString().isBlank())
+                    ? body.get("role").toString().trim() : "WAITER";
+
+            Object rawSalary = body.get("salary");
+            Double staffSalary = (rawSalary != null && !rawSalary.toString().isBlank())
+                    ? Double.valueOf(rawSalary.toString()) : null;
+
             Staff staff = Staff.builder()
-                    .name(body.get("name").toString())
-                    .phone(body.containsKey("phone") && body.get("phone") != null ? body.get("phone").toString() : null)
-                    .role(body.containsKey("role") && body.get("role") != null ? body.get("role").toString() : "WAITER")
-                    .salary(body.containsKey("salary") && body.get("salary") != null ? Double.valueOf(body.get("salary").toString()) : null)
+                    .name(staffName)
+                    .phone(staffPhone)
+                    .role(staffRole)
+                    .salary(staffSalary)
                     .isActive(true)
                     .hotel(hotel)
                     .build();
 
-            return ResponseEntity.ok(Map.of("success", true, "data", serializeStaff(staffRepository.save(staff))));
+            Staff savedStaff = staffRepository.save(staff);
+
+            // Also create Captain login credentials if email is provided and role is Waiter/Captain
+            Object rawEmail = body.get("email");
+            if (rawEmail != null && !rawEmail.toString().isBlank() &&
+                    (staffRole.equalsIgnoreCase("WAITER") || staffRole.equalsIgnoreCase("CAPTAIN"))) {
+                String email = rawEmail.toString().trim();
+                if (adminRepository.findByEmail(email).isEmpty()) {
+                    Object rawPass = body.get("password");
+                    String plainPassword = (rawPass != null && !rawPass.toString().isBlank())
+                            ? rawPass.toString() : (staffPhone != null ? staffPhone : "123456");
+
+                    Admin captainAccount = Admin.builder()
+                            .name(staffName)
+                            .email(email)
+                            .password(passwordEncoder.encode(plainPassword))
+                            .role("CAPTAIN")
+                            .isActive(true)
+                            .hotel(hotel)
+                            .build();
+                    adminRepository.save(captainAccount);
+                }
+            }
+
+            return ResponseEntity.ok(Map.of("success", true, "data", serializeStaff(savedStaff)));
         } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("success", false, "message", e.getMessage()));
+            return ResponseEntity.status(500).body(Map.of("success", false, "message", e.getMessage() != null ? e.getMessage() : "Error adding staff"));
         }
     }
-
     // PUT /api/staff/{id}
     @PutMapping("/{id}")
     public ResponseEntity<?> updateStaff(@PathVariable Long id, @RequestBody Map<String, Object> body) {

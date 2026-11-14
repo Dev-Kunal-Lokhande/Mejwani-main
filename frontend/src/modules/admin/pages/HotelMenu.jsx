@@ -124,7 +124,7 @@ export default function HotelMenu() {
   // Pull dynamic list from database
   const fetchMenu = async (showLoader = false) => {
     if (showLoader) setLoading(true);
-    setIsSyncing(true);f
+    setIsSyncing(true);
     setErrorMsg("");
     try {
       const [menuRes, categoriesRes] = await Promise.all([
