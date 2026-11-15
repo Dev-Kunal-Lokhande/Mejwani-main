@@ -1,0 +1,347 @@
+<svg id="dfd" viewBox="0 0 720 1500" width="100%" xmlns="http://www.w3.org/2000/svg"
+       font-family="'Times New Roman', serif" font-size="11">
+
+    <defs>
+      <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 z" fill="#111"/>
+      </marker>
+    </defs>
+
+    <!-- ===================== ROW 0: Spacing ref Y=60 ===================== -->
+    <!-- Process Y centers: 90, 240, 390, 540, 690, 840, 990, 1140, 1290 -->
+    <!-- Entity X: 30 (left), Process X: 310, DS X: 570 -->
+
+    <!-- ============ 1.0 LOGIN ============ -->
+    <!-- Left Entity: Super Admin -->
+    <rect x="30" y="58" width="110" height="44" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="85" y="76" text-anchor="middle" font-size="11" font-weight="bold">Super Admin</text>
+    <text x="85" y="92" text-anchor="middle" font-size="10">/ Admin / Captain</text>
+
+    <!-- Arrow: Entity → Process -->
+    <line x1="140" y1="80" x2="285" y2="80" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="212" y="74" text-anchor="middle" font-size="9">Username &amp; Password</text>
+
+    <!-- Arrow: Process → Entity -->
+    <line x1="285" y1="92" x2="140" y2="92" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="212" y="104" text-anchor="middle" font-size="9">JWT Token / Error</text>
+
+    <!-- Process Circle 1.0 -->
+    <circle cx="310" cy="86" r="38" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="310" y="80" text-anchor="middle" font-size="10" font-weight="bold">1.0</text>
+    <text x="310" y="94" text-anchor="middle" font-size="10">Login /</text>
+    <text x="310" y="106" text-anchor="middle" font-size="10">Auth</text>
+
+    <!-- Arrow: Process → DS -->
+    <line x1="348" y1="78" x2="490" y2="78" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="72" text-anchor="middle" font-size="9">Store/Verify credentials</text>
+
+    <!-- Arrow: DS → Process -->
+    <line x1="490" y1="90" x2="348" y2="90" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="104" text-anchor="middle" font-size="9">Reply</text>
+
+    <!-- Data Store D1 -->
+    <rect x="490" y="62" width="20" height="44" fill="#eee" stroke="#111" stroke-width="1.5"/>
+    <rect x="510" y="62" width="100" height="44" fill="white" stroke="#111" stroke-width="1.5" stroke-dasharray="0 0 1.5 0"/>
+    <text x="502" y="80" text-anchor="middle" font-size="10" font-weight="bold">D1</text>
+    <text x="560" y="80" text-anchor="middle" font-size="10">Users /</text>
+    <text x="560" y="94" text-anchor="middle" font-size="10">Admins DB</text>
+
+    <!-- ============ 1.1 ORDER MANAGEMENT ============ -->
+    <line x1="310" y1="124" x2="310" y2="152" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- Left Entity: Captain -->
+    <rect x="30" y="208" width="110" height="44" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="85" y="230" text-anchor="middle" font-size="11" font-weight="bold">Captain</text>
+    <text x="85" y="244" text-anchor="middle" font-size="10">Order Taker</text>
+
+    <!-- Arrow: Entity → Process -->
+    <line x1="140" y1="224" x2="272" y2="224" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="206" y="218" text-anchor="middle" font-size="9">Table + Items + KOT</text>
+
+    <!-- Arrow: Process → Entity -->
+    <line x1="272" y1="238" x2="140" y2="238" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="206" y="252" text-anchor="middle" font-size="9">Order Confirmation</text>
+
+    <!-- Process Circle 1.1 -->
+    <circle cx="310" cy="232" r="38" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="310" y="224" text-anchor="middle" font-size="10" font-weight="bold">1.1</text>
+    <text x="310" y="237" text-anchor="middle" font-size="10">Order</text>
+    <text x="310" y="250" text-anchor="middle" font-size="10">Management</text>
+
+    <!-- Arrow: Process → DS -->
+    <line x1="348" y1="224" x2="490" y2="224" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="218" text-anchor="middle" font-size="9">Save Order (pending)</text>
+
+    <!-- Arrow: DS → Process -->
+    <line x1="490" y1="236" x2="348" y2="236" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="250" text-anchor="middle" font-size="9">Reply</text>
+
+    <!-- Data Store D2 -->
+    <rect x="490" y="208" width="20" height="44" fill="#eee" stroke="#111" stroke-width="1.5"/>
+    <rect x="510" y="208" width="100" height="44" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="502" y="226" text-anchor="middle" font-size="10" font-weight="bold">D2</text>
+    <text x="560" y="226" text-anchor="middle" font-size="10">Orders /</text>
+    <text x="560" y="240" text-anchor="middle" font-size="10">Order Items</text>
+
+    <!-- ============ 1.2 MENU MANAGEMENT ============ -->
+    <line x1="310" y1="270" x2="310" y2="300" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- Left Entity: Admin -->
+    <rect x="30" y="354" width="110" height="44" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="85" y="376" text-anchor="middle" font-size="11" font-weight="bold">Admin</text>
+    <text x="85" y="390" text-anchor="middle" font-size="10">Hotel Manager</text>
+
+    <!-- Arrow: Entity → Process -->
+    <line x1="140" y1="370" x2="272" y2="370" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="206" y="364" text-anchor="middle" font-size="9">Add / Edit Menu Items</text>
+
+    <!-- Arrow: Process → Entity -->
+    <line x1="272" y1="384" x2="140" y2="384" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="206" y="398" text-anchor="middle" font-size="9">Menu Saved / Error</text>
+
+    <!-- Process Circle 1.2 -->
+    <circle cx="310" cy="378" r="38" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="310" y="370" text-anchor="middle" font-size="10" font-weight="bold">1.2</text>
+    <text x="310" y="383" text-anchor="middle" font-size="10">Menu</text>
+    <text x="310" y="396" text-anchor="middle" font-size="10">Management</text>
+
+    <!-- Arrow: Process → DS -->
+    <line x1="348" y1="370" x2="490" y2="370" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="364" text-anchor="middle" font-size="9">Store menu data</text>
+
+    <!-- Arrow: DS → Process -->
+    <line x1="490" y1="382" x2="348" y2="382" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="396" text-anchor="middle" font-size="9">Reply</text>
+
+    <!-- Data Store D3 -->
+    <rect x="490" y="354" width="20" height="44" fill="#eee" stroke="#111" stroke-width="1.5"/>
+    <rect x="510" y="354" width="100" height="44" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="502" y="372" text-anchor="middle" font-size="10" font-weight="bold">D3</text>
+    <text x="560" y="372" text-anchor="middle" font-size="10">Menu Items /</text>
+    <text x="560" y="386" text-anchor="middle" font-size="10">Categories</text>
+
+    <!-- ============ 1.3 TABLE MANAGEMENT ============ -->
+    <line x1="310" y1="416" x2="310" y2="446" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- Left Entity: Admin -->
+    <rect x="30" y="500" width="110" height="44" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="85" y="522" text-anchor="middle" font-size="11" font-weight="bold">Admin</text>
+    <text x="85" y="536" text-anchor="middle" font-size="10">/ Captain</text>
+
+    <!-- Arrow: Entity → Process -->
+    <line x1="140" y1="516" x2="272" y2="516" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="206" y="510" text-anchor="middle" font-size="9">Add Tables / Sections</text>
+
+    <!-- Arrow: Process → Entity -->
+    <line x1="272" y1="528" x2="140" y2="528" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="206" y="542" text-anchor="middle" font-size="9">Table Status / Layout</text>
+
+    <!-- Process Circle 1.3 -->
+    <circle cx="310" cy="522" r="38" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="310" y="514" text-anchor="middle" font-size="10" font-weight="bold">1.3</text>
+    <text x="310" y="527" text-anchor="middle" font-size="10">Table</text>
+    <text x="310" y="540" text-anchor="middle" font-size="10">Management</text>
+
+    <!-- Arrow: Process → DS -->
+    <line x1="348" y1="516" x2="490" y2="516" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="510" text-anchor="middle" font-size="9">Store table data</text>
+
+    <!-- Arrow: DS → Process -->
+    <line x1="490" y1="528" x2="348" y2="528" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="542" text-anchor="middle" font-size="9">Reply</text>
+
+    <!-- Data Store D4 -->
+    <rect x="490" y="500" width="20" height="44" fill="#eee" stroke="#111" stroke-width="1.5"/>
+    <rect x="510" y="500" width="100" height="44" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="502" y="518" text-anchor="middle" font-size="10" font-weight="bold">D4</text>
+    <text x="560" y="518" text-anchor="middle" font-size="10">Tables /</text>
+    <text x="560" y="532" text-anchor="middle" font-size="10">Sections</text>
+
+    <!-- ============ 1.4 KITCHEN MANAGEMENT ============ -->
+    <line x1="310" y1="560" x2="310" y2="590" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- Left Entity: Kitchen Staff -->
+    <rect x="30" y="644" width="110" height="44" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="85" y="666" text-anchor="middle" font-size="11" font-weight="bold">Kitchen</text>
+    <text x="85" y="680" text-anchor="middle" font-size="10">Staff</text>
+
+    <!-- Arrow: Entity → Process -->
+    <line x1="140" y1="660" x2="272" y2="660" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="206" y="654" text-anchor="middle" font-size="9">Update Status</text>
+
+    <!-- Arrow: Process → Entity -->
+    <line x1="272" y1="672" x2="140" y2="672" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="206" y="686" text-anchor="middle" font-size="9">KOT Queue Display</text>
+
+    <!-- Process Circle 1.4 -->
+    <circle cx="310" cy="666" r="38" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="310" y="658" text-anchor="middle" font-size="10" font-weight="bold">1.4</text>
+    <text x="310" y="671" text-anchor="middle" font-size="10">Kitchen</text>
+    <text x="310" y="684" text-anchor="middle" font-size="10">Management</text>
+
+    <!-- Arrow: Process → DS -->
+    <line x1="348" y1="660" x2="490" y2="660" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="654" text-anchor="middle" font-size="9">Update order status</text>
+
+    <!-- Arrow: DS → Process -->
+    <line x1="490" y1="672" x2="348" y2="672" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="686" text-anchor="middle" font-size="9">Reply</text>
+
+    <!-- Data Store D5 (reuses D2 orders) -->
+    <rect x="490" y="644" width="20" height="44" fill="#eee" stroke="#111" stroke-width="1.5"/>
+    <rect x="510" y="644" width="100" height="44" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="502" y="662" text-anchor="middle" font-size="10" font-weight="bold">D5</text>
+    <text x="560" y="662" text-anchor="middle" font-size="10">KOT / Orders</text>
+    <text x="560" y="676" text-anchor="middle" font-size="10">(Status)</text>
+
+    <!-- ============ 1.5 BILLING ============ -->
+    <line x1="310" y1="704" x2="310" y2="734" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- Left Entity: Admin -->
+    <rect x="30" y="788" width="110" height="44" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="85" y="810" text-anchor="middle" font-size="11" font-weight="bold">Admin</text>
+    <text x="85" y="824" text-anchor="middle" font-size="10">/ Customer</text>
+
+    <!-- Arrow: Entity → Process -->
+    <line x1="140" y1="804" x2="272" y2="804" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="206" y="798" text-anchor="middle" font-size="9">Generate Bill Request</text>
+
+    <!-- Arrow: Process → Entity -->
+    <line x1="272" y1="816" x2="140" y2="816" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="206" y="830" text-anchor="middle" font-size="9">Bill / Receipt</text>
+
+    <!-- Process Circle 1.5 -->
+    <circle cx="310" cy="810" r="38" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="310" y="802" text-anchor="middle" font-size="10" font-weight="bold">1.5</text>
+    <text x="310" y="815" text-anchor="middle" font-size="10">Billing</text>
+    <text x="310" y="828" text-anchor="middle" font-size="10">Management</text>
+
+    <!-- Arrow: Process → DS -->
+    <line x1="348" y1="804" x2="490" y2="804" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="798" text-anchor="middle" font-size="9">Store bill data</text>
+
+    <!-- Arrow: DS → Process -->
+    <line x1="490" y1="816" x2="348" y2="816" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="830" text-anchor="middle" font-size="9">Reply</text>
+
+    <!-- Data Store D6 -->
+    <rect x="490" y="788" width="20" height="44" fill="#eee" stroke="#111" stroke-width="1.5"/>
+    <rect x="510" y="788" width="100" height="44" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="502" y="806" text-anchor="middle" font-size="10" font-weight="bold">D6</text>
+    <text x="560" y="806" text-anchor="middle" font-size="10">Bills</text>
+    <text x="560" y="820" text-anchor="middle" font-size="10">(Payments)</text>
+
+    <!-- ============ 1.6 STAFF MANAGEMENT ============ -->
+    <line x1="310" y1="848" x2="310" y2="878" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- Left Entity: Admin -->
+    <rect x="30" y="932" width="110" height="44" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="85" y="954" text-anchor="middle" font-size="11" font-weight="bold">Admin</text>
+    <text x="85" y="968" text-anchor="middle" font-size="10">HR Manager</text>
+
+    <!-- Arrow: Entity → Process -->
+    <line x1="140" y1="948" x2="272" y2="948" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="206" y="942" text-anchor="middle" font-size="9">Add / Manage Staff</text>
+
+    <!-- Arrow: Process → Entity -->
+    <line x1="272" y1="960" x2="140" y2="960" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="206" y="974" text-anchor="middle" font-size="9">Staff List / Attendance</text>
+
+    <!-- Process Circle 1.6 -->
+    <circle cx="310" cy="954" r="38" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="310" y="946" text-anchor="middle" font-size="10" font-weight="bold">1.6</text>
+    <text x="310" y="959" text-anchor="middle" font-size="10">Staff &amp;</text>
+    <text x="310" y="972" text-anchor="middle" font-size="10">Attendance</text>
+
+    <!-- Arrow: Process → DS -->
+    <line x1="348" y1="948" x2="490" y2="948" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="942" text-anchor="middle" font-size="9">Store staff data</text>
+
+    <!-- Arrow: DS → Process -->
+    <line x1="490" y1="960" x2="348" y2="960" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="974" text-anchor="middle" font-size="9">Reply</text>
+
+    <!-- Data Store D7 -->
+    <rect x="490" y="932" width="20" height="44" fill="#eee" stroke="#111" stroke-width="1.5"/>
+    <rect x="510" y="932" width="100" height="44" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="502" y="950" text-anchor="middle" font-size="10" font-weight="bold">D7</text>
+    <text x="560" y="950" text-anchor="middle" font-size="10">Staff /</text>
+    <text x="560" y="964" text-anchor="middle" font-size="10">Attendance</text>
+
+    <!-- ============ 1.7 PARCEL MANAGEMENT ============ -->
+    <line x1="310" y1="992" x2="310" y2="1022" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- Left Entity: Admin / Customer -->
+    <rect x="30" y="1076" width="110" height="44" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="85" y="1098" text-anchor="middle" font-size="11" font-weight="bold">Admin</text>
+    <text x="85" y="1112" text-anchor="middle" font-size="10">/ Customer</text>
+
+    <!-- Arrow: Entity → Process -->
+    <line x1="140" y1="1092" x2="272" y2="1092" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="206" y="1086" text-anchor="middle" font-size="9">Parcel Order Request</text>
+
+    <!-- Arrow: Process → Entity -->
+    <line x1="272" y1="1104" x2="140" y2="1104" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="206" y="1118" text-anchor="middle" font-size="9">Order ID / Status</text>
+
+    <!-- Process Circle 1.7 -->
+    <circle cx="310" cy="1098" r="38" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="310" y="1090" text-anchor="middle" font-size="10" font-weight="bold">1.7</text>
+    <text x="310" y="1103" text-anchor="middle" font-size="10">Parcel</text>
+    <text x="310" y="1116" text-anchor="middle" font-size="10">Management</text>
+
+    <!-- Arrow: Process → DS -->
+    <line x1="348" y1="1092" x2="490" y2="1092" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="1086" text-anchor="middle" font-size="9">Store parcel order</text>
+
+    <!-- Arrow: DS → Process -->
+    <line x1="490" y1="1104" x2="348" y2="1104" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="1118" text-anchor="middle" font-size="9">Reply</text>
+
+    <!-- Data Store D8 -->
+    <rect x="490" y="1076" width="20" height="44" fill="#eee" stroke="#111" stroke-width="1.5"/>
+    <rect x="510" y="1076" width="100" height="44" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="502" y="1094" text-anchor="middle" font-size="10" font-weight="bold">D8</text>
+    <text x="560" y="1094" text-anchor="middle" font-size="10">Parcel</text>
+    <text x="560" y="1108" text-anchor="middle" font-size="10">Orders</text>
+
+    <!-- ============ 1.8 ANALYTICS & REPORTS ============ -->
+    <line x1="310" y1="1136" x2="310" y2="1166" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+
+    <!-- Left Entity: Admin / Super Admin -->
+    <rect x="30" y="1220" width="110" height="44" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="85" y="1242" text-anchor="middle" font-size="11" font-weight="bold">Admin /</text>
+    <text x="85" y="1256" text-anchor="middle" font-size="10">Super Admin</text>
+
+    <!-- Arrow: Entity → Process -->
+    <line x1="140" y1="1236" x2="272" y2="1236" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="206" y="1230" text-anchor="middle" font-size="9">View Reports Request</text>
+
+    <!-- Arrow: Process → Entity -->
+    <line x1="272" y1="1248" x2="140" y2="1248" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="206" y="1262" text-anchor="middle" font-size="9">Sales / Analytics Data</text>
+
+    <!-- Process Circle 1.8 -->
+    <circle cx="310" cy="1242" r="38" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="310" y="1234" text-anchor="middle" font-size="10" font-weight="bold">1.8</text>
+    <text x="310" y="1247" text-anchor="middle" font-size="10">Analytics &amp;</text>
+    <text x="310" y="1260" text-anchor="middle" font-size="10">Reports</text>
+
+    <!-- Arrow: Process → DS -->
+    <line x1="348" y1="1236" x2="490" y2="1236" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="1230" text-anchor="middle" font-size="9">Read orders &amp; bills</text>
+
+    <!-- Arrow: DS → Process -->
+    <line x1="490" y1="1248" x2="348" y2="1248" stroke="#111" stroke-width="1" marker-end="url(#arr)"/>
+    <text x="420" y="1262" text-anchor="middle" font-size="9">Reply</text>
+
+    <!-- Data Store D9 -->
+    <rect x="490" y="1220" width="20" height="44" fill="#eee" stroke="#111" stroke-width="1.5"/>
+    <rect x="510" y="1220" width="100" height="44" fill="white" stroke="#111" stroke-width="1.5"/>
+    <text x="502" y="1238" text-anchor="middle" font-size="10" font-weight="bold">D9</text>
+    <text x="560" y="1238" text-anchor="middle" font-size="10">Orders /</text>
+    <text x="560" y="1252" text-anchor="middle" font-size="10">Bills (Read)</text>
+
+    <!-- Bottom label -->
+    <text x="360" y="1490" text-anchor="middle" font-size="12" font-style="italic">Fig 3.1.2 — 1st Level DFD (Mejwani Restaurant Management System)</text>
+  </svg>

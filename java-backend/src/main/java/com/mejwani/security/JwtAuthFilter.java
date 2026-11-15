@@ -35,22 +35,43 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
+            String token = authHeader.substring(7).trim();
             try {
                 if (jwtUtil.validateToken(token)) {
                     String email = jwtUtil.getEmailFromToken(token);
-                    String role = jwtUtil.getRoleFromToken(token);
-                    Optional<Admin> adminOpt = adminRepository.findByEmail(email);
-                    if (adminOpt.isPresent()) {
-                        var auth = new UsernamePasswordAuthenticationToken(
-                                adminOpt.get(),
-                                null,
-                                List.of(new SimpleGrantedAuthority("ROLE_" + role))
-                        );
-                        SecurityContextHolder.getContext().setAuthentication(auth);
+                    String role = null;
+                    try {
+                        role = jwtUtil.getRoleFromToken(token);
+                    } catch (Exception ignored) {}
+
+                    if (role == null || role.isBlank()) {
+                        role = "ADMIN";
                     }
+                    String authority = role.startsWith("ROLE_") ? role : "ROLE_" + role;
+
+                    Optional<Admin> adminOpt = (email != null) ? adminRepository.findByEmail(email) : Optional.empty();
+                    Object principal;
+                    if (adminOpt.isPresent()) {
+                        principal = adminOpt.get();
+                    } else {
+                        Admin jwtAdmin = new Admin();
+                        jwtAdmin.setEmail(email);
+                        jwtAdmin.setRole(role);
+                        principal = jwtAdmin;
+                    }
+
+                    var auth = new UsernamePasswordAuthenticationToken(
+                            principal,
+                            null,
+                            List.of(new SimpleGrantedAuthority(authority))
+                    );
+                    SecurityContextHolder.getContext().setAuthentication(auth);
+                } else {
+                    System.out.println("[JwtAuthFilter] Invalid or expired token for: " + request.getRequestURI());
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                System.err.println("[JwtAuthFilter] Auth error on " + request.getRequestURI() + ": " + e.getMessage());
+            }
         }
         filterChain.doFilter(request, response);
     }

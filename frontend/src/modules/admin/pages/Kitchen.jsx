@@ -16,6 +16,7 @@ import {
 import axios from 'axios';
 import AdminLayout from '../../../shared/layouts/AdminLayout';
 import { API_BASE } from '../../../shared/services/apiBase';
+import socket from '../../../shared/services/socketClient';
 
 export default function AdminKitchen() {
   const [queue, setQueue] = useState([]);
@@ -35,9 +36,15 @@ export default function AdminKitchen() {
   const fetchQueue = async (isManual = false) => {
     if (isManual) setRefreshing(true);
     try {
+      const token = localStorage.getItem('mejwani_admin_jwt');
+      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
+      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+      const hParam = hotelId ? `?hotelId=${hotelId}` : '';
+
       const [ordersRes, parcelsRes] = await Promise.all([
-        axios.get(`${API_BASE}/orders/kitchen-queue`).catch(() => ({ data: { success: false } })),
-        axios.get(`${API_BASE}/parcels?date=today`).catch(() => ({ data: { success: false } }))
+        axios.get(`${API_BASE}/orders/kitchen-queue${hParam}`, { headers: authHeader }).catch(() => ({ data: { success: false } })),
+        axios.get(`${API_BASE}/parcels?date=today`, { headers: authHeader }).catch(() => ({ data: { success: false } }))
       ]);
 
       let allQueue = [];
@@ -48,7 +55,7 @@ export default function AdminKitchen() {
             Array.isArray(order.items) &&
             order.items.length > 0 &&
             order.status &&
-            ['pending', 'cooking'].includes(order.status.toLowerCase()) &&
+            ['pending', 'cooking', 'preparing', 'new', 'sent_to_kitchen'].includes(order.status.toLowerCase()) &&
             order.type !== 'service-request' &&
             order.category !== 'service-request' &&
             order.requestType !== 'service-request'
@@ -60,20 +67,20 @@ export default function AdminKitchen() {
       if (parcelsRes.data && parcelsRes.data.success) {
         const parcelData = parcelsRes.data.data.filter(p => ['pending', 'pending_kitchen', 'preparing'].includes(p.status));
         const mappedParcels = parcelData.map(p => {
-            let pItems = [];
-            if (typeof p.items === 'string') {
-                try { pItems = JSON.parse(p.items); } catch(e){}
-            } else { pItems = p.items || []; }
-            return {
-                _id: p.id || p._id,
-                id: p.id || p._id,
-                tableNo: `PARCEL`,
-                captain: p.customer_name || 'Walk-in',
-                status: p.status === 'preparing' ? 'cooking' : 'pending',
-                isParcel: true,
-                parcel_id: p.parcel_id,
-                items: pItems
-            };
+          let pItems = [];
+          if (typeof p.items === 'string') {
+            try { pItems = JSON.parse(p.items); } catch (e) {}
+          } else { pItems = p.items || []; }
+          return {
+            _id: p.id || p._id,
+            id: p.id || p._id,
+            tableNo: `PARCEL`,
+            captain: p.customer_name || 'Walk-in',
+            status: p.status === 'preparing' ? 'cooking' : 'pending',
+            isParcel: true,
+            parcel_id: p.parcel_id,
+            items: pItems
+          };
         });
         allQueue = [...allQueue, ...mappedParcels];
       }
@@ -96,31 +103,61 @@ export default function AdminKitchen() {
   // Set up live tracking polling
   useEffect(() => {
     fetchQueue();
-    // Auto-poll the queue every 7 seconds for live synchronization
     const interval = setInterval(() => {
       fetchQueue();
     }, 7000);
     return () => clearInterval(interval);
   }, []);
 
-  // Update order preparation status
+ // Update order preparation status
   const handleUpdateStatus = async (orderId, currentStatus, tableNo, isParcel = false) => {
-    const nextStatus = currentStatus === 'pending' ? 'cooking' : 'ready';
-    const apiNextStatus = isParcel ? (currentStatus === 'pending' ? 'preparing' : 'ready') : nextStatus;
+    const isPending = ['new', 'pending', 'sent_to_kitchen'].includes((currentStatus || '').toLowerCase());
+    const uiNextStatus = isPending ? 'cooking' : 'ready';
+    const apiNextStatus = isParcel
+      ? (isPending ? 'preparing' : 'ready')
+      : (isPending ? 'PREPARING' : 'READY');
+
     const url = isParcel ? `${API_BASE}/parcels/${orderId}` : `${API_BASE}/orders/${orderId}/status`;
 
     try {
-      // Optimistic UI updates for high responsiveness
-      setQueue(prev => prev.map(o => o.id === orderId ? { ...o, status: nextStatus } : o));
+      setQueue(prev => prev.map(o => o.id === orderId ? { ...o, status: uiNextStatus } : o));
 
-      const response = isParcel 
-        ? await axios.patch(url, { status: apiNextStatus }) 
+      const response = isParcel
+        ? await axios.patch(url, { status: apiNextStatus })
         : await axios.put(url, { status: apiNextStatus });
 
       if (response.data && response.data.success) {
-        if (nextStatus === 'ready') {
-          showToast(`${isParcel ? 'Parcel' : 'Table ' + tableNo} order is marked READY and dispatched!`);
-          // Automatically filter out the "ready" orders from the live kitchen queue
+        if (uiNextStatus === 'ready') {
+          const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
+          const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+          const currentOrder = queue.find(o => o.id === orderId);
+          
+          const displayTable = isParcel
+            ? (currentOrder?.captain && currentOrder.captain !== 'Walk-in'
+                ? currentOrder.captain
+                : `Parcel ${currentOrder?.parcel_id || orderId}`)
+            : `${tableNo}`;
+
+          const readyPayload = {
+            hotelId,
+            orderId,
+            isParcel,
+            tableName: displayTable,
+            kotNumber: currentOrder?.kot_number || currentOrder?.parcel_id || `ORD-${orderId}`,
+            status: 'READY'
+          };
+
+          // 1. Emit via Socket.IO
+          socket.emit('order-ready', readyPayload);
+
+          // 2. Instant cross-tab broadcast for Admin / Orders / Captain tabs
+          try {
+            const bc = new BroadcastChannel('mejwani_realtime_alerts');
+            bc.postMessage({ type: 'ORDER_READY', payload: readyPayload });
+            bc.close();
+          } catch (e) {}
+
+          showToast(`${isParcel ? displayTable : 'Table ' + displayTable} order is marked READY and dispatched!`);
           setQueue(prev => prev.filter(o => o.id !== orderId));
         } else {
           showToast(`${isParcel ? 'Parcel' : 'Table ' + tableNo} order is now COOKING!`);
@@ -135,10 +172,9 @@ export default function AdminKitchen() {
       fetchQueue();
     }
   };
-
   // Calculate stats
-  const pendingCount = queue.filter(o => o.status === 'pending').length;
-  const cookingCount = queue.filter(o => o.status === 'cooking').length;
+  const pendingCount = queue.filter(o => ['pending', 'new', 'sent_to_kitchen'].includes((o.status || '').toLowerCase())).length;
+  const cookingCount = queue.filter(o => ['cooking', 'preparing'].includes((o.status || '').toLowerCase())).length;
 
   // Format date helper
   const formatTime = (isoString) => {
@@ -241,16 +277,17 @@ export default function AdminKitchen() {
               const elapsed = getElapsedMins(order.createdAt);
               const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
               const isExpanded = expandedCard === order.id;
+              const isCooking = ['cooking', 'preparing'].includes((order.status || '').toLowerCase());
 
               return (
                 <div
                   key={order.id}
                   className={`bg-white dark:bg-[#0d0d0d] border rounded-[2.5rem] p-6 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden
-                    ${order.status === 'cooking' ? 'border-orange-500/30 dark:border-orange-500/20' : 'border-slate-200 dark:border-white/5'}
+                    ${isCooking ? 'border-orange-500/30 dark:border-orange-500/20' : 'border-slate-200 dark:border-white/5'}
                   `}
                 >
                   {/* Subtle Orange top bar for Cooking state */}
-                  {order.status === 'cooking' && (
+                  {isCooking && (
                     <div className="absolute top-0 left-0 right-0 h-1.5 bg-orange-500 animate-pulse" />
                   )}
 
@@ -330,7 +367,7 @@ export default function AdminKitchen() {
                       <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">KOT Preparation</span>
                       <div className="flex items-center gap-1.5">
                         <span className={`w-2 h-2 rounded-full 
-                          ${order.status === 'cooking' ? 'bg-orange-500 animate-ping' : 'bg-slate-300 dark:bg-white/20'}
+                          ${isCooking ? 'bg-orange-500 animate-ping' : 'bg-slate-300 dark:bg-white/20'}
                         `} />
                         <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full ${
                           order.isParcel 
@@ -340,9 +377,9 @@ export default function AdminKitchen() {
                           {order.tableNo} {order.parcel_id ? `(${order.parcel_id})` : ''}
                         </span>
                         <span className={`text-[10px] font-black uppercase tracking-wider
-                          ${order.status === 'cooking' ? 'text-orange-500' : 'text-slate-400 dark:text-slate-500'}
+                          ${isCooking ? 'text-orange-500' : 'text-slate-400 dark:text-slate-500'}
                         `}>
-                          {order.status === 'cooking' ? 'Preparing' : 'Pending'}
+                          {isCooking ? 'Preparing' : 'Pending'}
                         </span>
                       </div>
                     </div>
@@ -350,18 +387,18 @@ export default function AdminKitchen() {
                     <button
                       onClick={() => handleUpdateStatus(order.id, order.status, order.tableNo, order.isParcel)}
                       className={`w-full py-4 rounded-xl flex items-center justify-center gap-2 font-extrabold text-xs uppercase tracking-widest transition-all ${
-                        order.status === 'pending'
-                          ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-500/25'
-                          : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25'
+                        isCooking
+                          ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25'
+                          : 'bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-500/25'
                       }`}
                     >
-                      {order.status === 'pending' ? (
+                      {isCooking ? (
                         <>
-                          <Play className="w-3.5 h-3.5" /> Start Preparing
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Mark Ready
                         </>
                       ) : (
                         <>
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Mark Ready
+                          <Play className="w-3.5 h-3.5" /> Start Preparing
                         </>
                       )}
                     </button>

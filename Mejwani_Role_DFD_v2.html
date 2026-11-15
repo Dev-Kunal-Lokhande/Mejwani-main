@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mejwani - Role-wise 1st Level DFDs</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Times New Roman', Times, serif; background: #fff; color: #000; }
+
+  .tab-bar {
+    display: flex; background: #f0f0f0; border-bottom: 2px solid #000;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .tab-btn {
+    padding: 10px 20px; border: none; background: #f0f0f0;
+    font-family: 'Times New Roman', Times, serif; font-size: 14px;
+    cursor: pointer; border-right: 1px solid #ccc;
+  }
+  .tab-btn.active { background: #fff; font-weight: bold; border-bottom: 2px solid #fff; margin-bottom: -2px; }
+  .tab-btn:hover { background: #e0e0e0; }
+
+  .tab-content { display: none; padding: 30px; }
+  .tab-content.active { display: block; }
+
+  h2 { font-size: 16pt; font-weight: bold; margin-bottom: 24px; text-align: left; }
+
+  /* DFD ROW */
+  .dfd-row {
+    display: flex; align-items: center; margin-bottom: 32px;
+    gap: 0;
+  }
+
+  /* Entity box */
+  .entity {
+    width: 90px; min-height: 44px;
+    border: 2px solid #000;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12pt; font-weight: bold;
+    text-align: center; padding: 4px;
+    background: #fff;
+    flex-shrink: 0;
+  }
+
+  /* Arrow group: label + arrow */
+  .arrow-col {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; flex-shrink: 0;
+  }
+  .arrow-label {
+    font-size: 9pt; text-align: center; white-space: nowrap;
+    margin-bottom: 2px; max-width: 120px;
+  }
+  .arrow-label-bottom {
+    font-size: 9pt; text-align: center; white-space: nowrap;
+    margin-top: 2px; max-width: 120px;
+  }
+
+  /* Two-row arrows (top label + arrow going right, bottom label + arrow going left) */
+  .arrows-double {
+    display: flex; flex-direction: column; align-items: center; width: 130px;
+  }
+  .arrow-right { display: flex; align-items: center; width: 100%; }
+  .arrow-left  { display: flex; align-items: center; width: 100%; flex-direction: row-reverse; }
+  .arrow-line {
+    flex: 1; height: 1.5px; background: #000;
+  }
+  .arrow-head-r { width: 0; height: 0;
+    border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+    border-left: 8px solid #000;
+  }
+  .arrow-head-l { width: 0; height: 0;
+    border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+    border-right: 8px solid #000;
+  }
+
+  /* Process circle */
+  .process {
+    width: 80px; height: 80px; border-radius: 50%;
+    border: 2px solid #000; background: #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; flex-shrink: 0;
+    padding: 4px;
+  }
+  .process-num { font-size: 10pt; font-weight: bold; }
+  .process-name { font-size: 9pt; }
+
+  /* Datastore: open rectangle (two horizontal lines, text between) */
+  .datastore {
+    display: flex; align-items: center; min-width: 90px; flex-shrink: 0;
+  }
+  .ds-id {
+    border: 2px solid #000; border-right: none;
+    padding: 4px 6px; font-size: 10pt; font-weight: bold;
+    min-height: 36px; display: flex; align-items: center; background: #fff;
+  }
+  .ds-name {
+    border-top: 2px solid #000; border-bottom: 2px solid #000; border-right: 2px solid #000;
+    padding: 4px 8px; font-size: 10pt; min-height: 36px;
+    display: flex; align-items: center; background: #fff;
+  }
+
+  .print-btn {
+    position: fixed; bottom: 20px; right: 20px;
+    background: #000; color: #fff; border: none;
+    padding: 12px 20px; font-size: 14px; cursor: pointer;
+    font-family: 'Times New Roman', Times, serif;
+  }
+
+  @media print {
+    .tab-bar, .print-btn { display: none; }
+    .tab-content { display: block !important; page-break-after: always; }
+    body { background: #fff; }
+  }
+</style>
+</head>
+<body>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="showTab('superadmin')">3.1.1 Super Admin</button>
+  <button class="tab-btn" onclick="showTab('admin')">3.1.2 Admin</button>
+  <button class="tab-btn" onclick="showTab('captain')">3.1.3 Captain</button>
+  <button class="tab-btn" onclick="showTab('kitchen')">3.1.4 Kitchen Staff</button>
+  <button class="tab-btn" onclick="showTab('customer')">3.1.5 Customer</button>
+</div>
+
+<!-- ============================================================ SUPER ADMIN ============================================================ -->
+<div id="tab-superadmin" class="tab-content active">
+  <h2>3.1.1 1<sup>st</sup> Level Super Admin DFD</h2>
+
+  <!-- 1.0 Login -->
+  <div class="dfd-row">
+    <div class="entity">Super Admin</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Request Login</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Successful / Error</div>
+    </div>
+    <div class="process"><span class="process-num">1.0</span><span class="process-name">Login</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Check credentials</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D1</div><div class="ds-name">Admin</div></div>
+  </div>
+
+  <!-- 1.1 Manage Hotels -->
+  <div class="dfd-row">
+    <div class="entity">Super Admin</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Add / Edit Hotel</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Hotel List</div>
+    </div>
+    <div class="process"><span class="process-num">1.1</span><span class="process-name">Manage Hotels</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Store / Fetch data</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D2</div><div class="ds-name">Hotel</div></div>
+  </div>
+
+  <!-- 1.2 Manage Admins -->
+  <div class="dfd-row">
+    <div class="entity">Super Admin</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Create / Delete Admin</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Admin List</div>
+    </div>
+    <div class="process"><span class="process-num">1.2</span><span class="process-name">Manage Admins</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Store / Update</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D3</div><div class="ds-name">Admin</div></div>
+  </div>
+
+  <!-- 1.3 Manage Sections -->
+  <div class="dfd-row">
+    <div class="entity">Super Admin</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Add / Edit Section</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Section List</div>
+    </div>
+    <div class="process"><span class="process-num">1.3</span><span class="process-name">Manage Sections</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Store / Fetch</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D4</div><div class="ds-name">Section</div></div>
+  </div>
+
+  <!-- 1.4 Manage Tables -->
+  <div class="dfd-row">
+    <div class="entity">Super Admin</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Add / Remove Table</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Table List</div>
+    </div>
+    <div class="process"><span class="process-num">1.4</span><span class="process-name">Manage Tables</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Store / Fetch</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D5</div><div class="ds-name">Restaurant Table</div></div>
+  </div>
+
+  <!-- 1.5 View Reports -->
+  <div class="dfd-row">
+    <div class="entity">Super Admin</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Request Report</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Report Data</div>
+    </div>
+    <div class="process"><span class="process-num">1.5</span><span class="process-name">View Reports</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Fetch order/bill data</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D6</div><div class="ds-name">Order / Bill</div></div>
+  </div>
+
+  <!-- 1.6 Manage Staff -->
+  <div class="dfd-row">
+    <div class="entity">Super Admin</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Add / Edit Staff</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Staff List</div>
+    </div>
+    <div class="process"><span class="process-num">1.6</span><span class="process-name">Manage Staff</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Store / Update</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D7</div><div class="ds-name">Staff</div></div>
+  </div>
+
+  <!-- 1.7 Logout -->
+  <div class="dfd-row">
+    <div class="entity">Super Admin</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Request Logout</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Session Ended</div>
+    </div>
+    <div class="process"><span class="process-num">1.7</span><span class="process-name">Logout</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Update session</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D8</div><div class="ds-name">Admin</div></div>
+  </div>
+</div>
+
+<!-- ============================================================ ADMIN ============================================================ -->
+<div id="tab-admin" class="tab-content">
+  <h2>3.1.2 1<sup>st</sup> Level Admin DFD</h2>
+
+  <div class="dfd-row">
+    <div class="entity">Admin</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Request Login</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Successful / Error</div>
+    </div>
+    <div class="process"><span class="process-num">1.0</span><span class="process-name">Login</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Check credentials</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D1</div><div class="ds-name">Admin</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Admin</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Add / Edit Category</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Category List</div>
+    </div>
+    <div class="process"><span class="process-num">1.1</span><span class="process-name">Manage Menu Category</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Store / Fetch</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D2</div><div class="ds-name">Menu Category</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Admin</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Add / Edit Item</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Menu Item List</div>
+    </div>
+    <div class="process"><span class="process-num">1.2</span><span class="process-name">Manage Menu Items</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Store / Update</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D3</div><div class="ds-name">Menu Item</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Admin</div>
+    <div class="arrows-double">
+      <div class="arrow-label">View Order List</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Order Details</div>
+    </div>
+    <div class="process"><span class="process-num">1.3</span><span class="process-name">View Orders</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Fetch order data</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D4</div><div class="ds-name">Order</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Admin</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Generate Bill</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Bill / Receipt</div>
+    </div>
+    <div class="process"><span class="process-num">1.4</span><span class="process-name">Manage Bills</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Store / Fetch</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D5</div><div class="ds-name">Bill</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Admin</div>
+    <div class="arrows-double">
+      <div class="arrow-label">View Parcel Orders</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Parcel List</div>
+    </div>
+    <div class="process"><span class="process-num">1.5</span><span class="process-name">Parcel Orders</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Fetch parcel data</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D6</div><div class="ds-name">Parcel Order</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Admin</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Mark Attendance</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Attendance Record</div>
+    </div>
+    <div class="process"><span class="process-num">1.6</span><span class="process-name">Attendance</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Store / Update</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D7</div><div class="ds-name">Attendance</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Admin</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Request Reports</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Report Data</div>
+    </div>
+    <div class="process"><span class="process-num">1.7</span><span class="process-name">View Reports</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Fetch analytics</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D8</div><div class="ds-name">Order / Bill</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Admin</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Request Logout</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Session Ended</div>
+    </div>
+    <div class="process"><span class="process-num">1.8</span><span class="process-name">Logout</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Update session</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D9</div><div class="ds-name">Admin</div></div>
+  </div>
+</div>
+
+<!-- ============================================================ CAPTAIN ============================================================ -->
+<div id="tab-captain" class="tab-content">
+  <h2>3.1.3 1<sup>st</sup> Level Captain DFD</h2>
+
+  <div class="dfd-row">
+    <div class="entity">Captain</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Request Login</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Successful / Error</div>
+    </div>
+    <div class="process"><span class="process-num">1.0</span><span class="process-name">Login</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Check credentials</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D1</div><div class="ds-name">Admin</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Captain</div>
+    <div class="arrows-double">
+      <div class="arrow-label">View Table Status</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Table Layout</div>
+    </div>
+    <div class="process"><span class="process-num">1.1</span><span class="process-name">View Tables</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Fetch table data</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D2</div><div class="ds-name">Restaurant Table</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Captain</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Select Items &amp; Place</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Order Confirmed</div>
+    </div>
+    <div class="process"><span class="process-num">1.2</span><span class="process-name">Place Order</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Store order</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D3</div><div class="ds-name">Order</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Captain</div>
+    <div class="arrows-double">
+      <div class="arrow-label">View Menu</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Menu Items</div>
+    </div>
+    <div class="process"><span class="process-num">1.3</span><span class="process-name">Browse Menu</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Fetch menu data</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D4</div><div class="ds-name">Menu Item</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Captain</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Send Request</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Request Status</div>
+    </div>
+    <div class="process"><span class="process-num">1.4</span><span class="process-name">Captain Request</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Store request</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D5</div><div class="ds-name">Captain Request</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Captain</div>
+    <div class="arrows-double">
+      <div class="arrow-label">View Order Status</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">KOT Status</div>
+    </div>
+    <div class="process"><span class="process-num">1.5</span><span class="process-name">Track KOT</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Fetch order items</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D6</div><div class="ds-name">Order Item</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Captain</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Request Bill</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Bill Generated</div>
+    </div>
+    <div class="process"><span class="process-num">1.6</span><span class="process-name">Generate Bill</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Store / Fetch bill</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D7</div><div class="ds-name">Bill</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Captain</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Request Logout</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Session Ended</div>
+    </div>
+    <div class="process"><span class="process-num">1.7</span><span class="process-name">Logout</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Update session</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D8</div><div class="ds-name">Admin</div></div>
+  </div>
+</div>
+
+<!-- ============================================================ KITCHEN ============================================================ -->
+<div id="tab-kitchen" class="tab-content">
+  <h2>3.1.4 1<sup>st</sup> Level Kitchen Staff DFD</h2>
+
+  <div class="dfd-row">
+    <div class="entity">Kitchen Staff</div>
+    <div class="arrows-double">
+      <div class="arrow-label">View KOT Queue</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Pending KOT List</div>
+    </div>
+    <div class="process"><span class="process-num">1.0</span><span class="process-name">View KOT Queue</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Fetch pending orders</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D1</div><div class="ds-name">Order</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Kitchen Staff</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Start Preparing</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Status Updated</div>
+    </div>
+    <div class="process"><span class="process-num">1.1</span><span class="process-name">Update Status</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">UPDATE status</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D2</div><div class="ds-name">Order Item</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Kitchen Staff</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Mark Ready</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">KOT Ready</div>
+    </div>
+    <div class="process"><span class="process-num">1.2</span><span class="process-name">Mark KOT Ready</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">UPDATE ready flag</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D3</div><div class="ds-name">Order Item</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Kitchen Staff</div>
+    <div class="arrows-double">
+      <div class="arrow-label">View Item Details</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Item Info</div>
+    </div>
+    <div class="process"><span class="process-num">1.3</span><span class="process-name">View Menu Info</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Fetch item data</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D4</div><div class="ds-name">Menu Item</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Kitchen Staff</div>
+    <div class="arrows-double">
+      <div class="arrow-label">View Parcel KOT</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Parcel Orders</div>
+    </div>
+    <div class="process"><span class="process-num">1.4</span><span class="process-name">Parcel KOT</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Fetch parcel items</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D5</div><div class="ds-name">Parcel Order</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Kitchen Staff</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Receive Notification</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">New Order Alert</div>
+    </div>
+    <div class="process"><span class="process-num">1.5</span><span class="process-name">Real-time Notify</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Socket event</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D6</div><div class="ds-name">Order</div></div>
+  </div>
+</div>
+
+<!-- ============================================================ CUSTOMER ============================================================ -->
+<div id="tab-customer" class="tab-content">
+  <h2>3.1.5 1<sup>st</sup> Level Customer DFD</h2>
+
+  <div class="dfd-row">
+    <div class="entity">Customer</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Scan QR Code</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Menu Loaded</div>
+    </div>
+    <div class="process"><span class="process-num">1.0</span><span class="process-name">Scan QR &amp; Access</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Fetch table info</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D1</div><div class="ds-name">Restaurant Table</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Customer</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Browse Menu</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Item List</div>
+    </div>
+    <div class="process"><span class="process-num">1.1</span><span class="process-name">View Menu</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Fetch menu items</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D2</div><div class="ds-name">Menu Item</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Customer</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Select &amp; Order</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Order Placed / Error</div>
+    </div>
+    <div class="process"><span class="process-num">1.2</span><span class="process-name">Place Order</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Store order</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D3</div><div class="ds-name">Order</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Customer</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Track Order</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Status / ETA</div>
+    </div>
+    <div class="process"><span class="process-num">1.3</span><span class="process-name">Track Order</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Read order status</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D4</div><div class="ds-name">Order Item</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Customer</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Request Bill</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Bill Summary</div>
+    </div>
+    <div class="process"><span class="process-num">1.4</span><span class="process-name">View Bill</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Fetch bill data</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D5</div><div class="ds-name">Bill</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Customer</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Submit Ticket</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Ticket ID</div>
+    </div>
+    <div class="process"><span class="process-num">1.5</span><span class="process-name">Support Ticket</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Store ticket</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D6</div><div class="ds-name">Support Ticket</div></div>
+  </div>
+
+  <div class="dfd-row">
+    <div class="entity">Customer</div>
+    <div class="arrows-double">
+      <div class="arrow-label">Receive Notification</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Order Ready Alert</div>
+    </div>
+    <div class="process"><span class="process-num">1.6</span><span class="process-name">Real-time Notify</span></div>
+    <div class="arrows-double">
+      <div class="arrow-label">Socket event</div>
+      <div class="arrow-right"><div class="arrow-line"></div><div class="arrow-head-r"></div></div>
+      <div class="arrow-left"><div class="arrow-line"></div><div class="arrow-head-l"></div></div>
+      <div class="arrow-label-bottom">Reply</div>
+    </div>
+    <div class="datastore"><div class="ds-id">D7</div><div class="ds-name">Order</div></div>
+  </div>
+</div>
+
+<button class="print-btn" onclick="window.print()">🖨️ Print</button>
+
+<script>
+function showTab(role) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + role).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>

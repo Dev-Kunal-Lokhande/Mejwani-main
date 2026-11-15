@@ -253,7 +253,7 @@ function SettingsPageInner() {
         setPrintersError(data?.message || 'Failed to retrieve printer list from local agent.');
       }
     } catch (err) {
-      console.error('Failed to discover local printers:', err);
+      // Print agent not running — expected if agent not installed; show user-friendly message silently
       setPrintersError('Could not connect to local print agent. Please ensure the agent is running.');
     } finally {
       setLoadingPrinters(false);

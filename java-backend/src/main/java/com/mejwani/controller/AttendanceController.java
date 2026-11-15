@@ -23,6 +23,7 @@ public class AttendanceController {
         Map<String, Object> m = new HashMap<>();
         m.put("id", a.getId());
         m.put("attendance_date", a.getAttendanceDate());
+        m.put("date", a.getAttendanceDate() != null ? a.getAttendanceDate().toString() : null);
         m.put("status", a.getStatus());
         m.put("check_in", a.getCheckIn());
         m.put("check_out", a.getCheckOut());
@@ -35,47 +36,74 @@ public class AttendanceController {
             staffMap.put("role", a.getStaff().getRole());
             m.put("staff", staffMap);
             m.put("staff_id", a.getStaff().getId());
+            m.put("staffId", a.getStaff().getId());
         }
         return m;
     }
 
     @Transactional(readOnly = true)
     @GetMapping
-    public ResponseEntity<?> getAttendance(@RequestParam Long hotelId,
+    public ResponseEntity<?> getAttendance(@RequestParam(required = false) Long hotelId,
                                            @RequestParam(required = false) String date) {
-        List<Attendance> list = date != null
+        if (hotelId == null) {
+            return ResponseEntity.ok(List.of());
+        }
+        List<Attendance> list = (date != null && !date.isBlank())
                 ? attendanceRepository.findByHotelIdAndAttendanceDate(hotelId, LocalDate.parse(date))
                 : attendanceRepository.findByHotelId(hotelId);
         return ResponseEntity.ok(list.stream().map(this::serializeAttendance).toList());
     }
 
     @Transactional
-    @PostMapping
-    public ResponseEntity<?> markAttendance(@RequestBody Map<String, Object> body) {
-        Long hotelId = Long.valueOf(body.get("hotelId").toString());
-        Long staffId = Long.valueOf(body.get("staffId").toString());
-        String status = body.getOrDefault("status", "PRESENT").toString();
-        LocalDate date = body.containsKey("date") ?
-                LocalDate.parse(body.get("date").toString()) : LocalDate.now();
+    @PostMapping({"", "/mark"})
+    public ResponseEntity<?> markAttendance(@RequestParam(required = false) Long hotelId,
+                                            @RequestBody Map<String, Object> body) {
+        Object rawStaffId = body.get("staffId") != null ? body.get("staffId")
+                : (body.get("staff_id") != null ? body.get("staff_id") : body.get("id"));
+        if (rawStaffId == null || rawStaffId.toString().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "staffId is required"));
+        }
 
-        Hotel hotel = hotelRepository.findById(hotelId).orElseThrow(() -> new RuntimeException("Hotel not found"));
-        Staff staff = staffRepository.findById(staffId).orElseThrow(() -> new RuntimeException("Staff not found"));
+        Long staffId = Long.valueOf(rawStaffId.toString());
+        Staff staff = staffRepository.findById(staffId)
+                .orElseThrow(() -> new RuntimeException("Staff not found"));
+
+        Long resolvedHotelId = hotelId;
+        if (resolvedHotelId == null && body.get("hotelId") != null && !body.get("hotelId").toString().isBlank()) {
+            resolvedHotelId = Long.valueOf(body.get("hotelId").toString());
+        }
+        Hotel hotel = resolvedHotelId != null
+                ? hotelRepository.findById(resolvedHotelId).orElse(staff.getHotel())
+                : staff.getHotel();
+
+        String status = body.get("status") != null ? body.get("status").toString().toUpperCase() : "PRESENT";
+        Object rawDate = body.get("date") != null ? body.get("date") : body.get("attendance_date");
+        LocalDate date = (rawDate != null && !rawDate.toString().isBlank())
+                ? LocalDate.parse(rawDate.toString())
+                : LocalDate.now();
 
         var existing = attendanceRepository.findByStaffIdAndAttendanceDate(staffId, date);
+        Attendance saved;
         if (existing.isPresent()) {
             Attendance att = existing.get();
             att.setStatus(status);
-            return ResponseEntity.ok(serializeAttendance(attendanceRepository.save(att)));
+            saved = attendanceRepository.save(att);
+        } else {
+            Attendance att = Attendance.builder()
+                    .staff(staff)
+                    .hotel(hotel)
+                    .attendanceDate(date)
+                    .status(status)
+                    .build();
+            saved = attendanceRepository.save(att);
         }
 
-        Attendance att = Attendance.builder()
-                .staff(staff)
-                .hotel(hotel)
-                .attendanceDate(date)
-                .status(status)
-                .build();
-
-        return ResponseEntity.ok(serializeAttendance(attendanceRepository.save(att)));
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "status", "success",
+                "message", "Attendance marked as " + status,
+                "data", serializeAttendance(saved)
+        ));
     }
 
     @Transactional

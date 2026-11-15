@@ -21,6 +21,7 @@ import IssuedBillsPage from './modules/admin/pages/IssuedBills';
 import KitchenDisplay from './modules/kitchen/pages/KitchenDisplay';
 import CaptainPanel from './modules/captain/pages/CaptainPanel';
 import CustomerMenu from './modules/customer/pages/CustomerMenu';
+import EBillView from './modules/customer/pages/EBillView';
 import RoleSelection from './shared/pages/RoleSelection';
 import ProtectedRoute from './shared/components/ProtectedRoute';
 import CaptainProtectedRoute from './shared/components/CaptainProtectedRoute';
@@ -79,6 +80,7 @@ function App() {
           {/* Captain Panel Route */}
           <Route path="/captain" element={<CaptainProtectedRoute><CaptainPanel /></CaptainProtectedRoute>} />
           <Route path="/menu" element={<CustomerMenu />} />
+          <Route path="/ebill" element={<EBillView />} />
 
           {/* Landing / Selector Gate */}
           <Route path="/select-panel" element={<RoleSelection />} />

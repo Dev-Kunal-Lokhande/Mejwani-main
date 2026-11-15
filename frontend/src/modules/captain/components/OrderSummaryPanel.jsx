@@ -97,9 +97,9 @@ export default function OrderSummaryPanel({
       {/* Cart Items List */}
       <div className="flex-1 overflow-y-auto min-h-0 space-y-3 scrollbar-none pr-1">
         <AnimatePresence mode="popLayout">
-          {cart.map((item) => (
-            <motion.div
-              key={item.id}
+        {cart.map((item, idx) => (
+  <motion.div
+    key={`${item.id || item.name}-${idx}`}
               layout
               initial={{ opacity: 0, x: 15 }}
               animate={{ opacity: 1, x: 0 }}

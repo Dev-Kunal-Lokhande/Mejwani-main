@@ -512,8 +512,22 @@ export default function RoleSelection() {
         setShowLoginModal(true);
       }
     } else {
-      // Check if already authenticated with active Captain JWT token
-      const isAuthenticated = !!localStorage.getItem('mejwani_captain_jwt');
+      // Check if already authenticated with active Captain JWT token (also validate expiry)
+      const captainToken = localStorage.getItem('mejwani_captain_jwt');
+      let isAuthenticated = false;
+      if (captainToken) {
+        try {
+          const payload = JSON.parse(atob(captainToken.split('.')[1]));
+          isAuthenticated = payload.exp && payload.exp * 1000 > Date.now();
+          if (!isAuthenticated) {
+            // Token expired — clear stale data and show login
+            localStorage.removeItem('mejwani_captain_jwt');
+            localStorage.removeItem('mejwani_captain_user');
+          }
+        } catch {
+          localStorage.removeItem('mejwani_captain_jwt');
+        }
+      }
       if (isAuthenticated) {
         setSelectedRole('captain');
         setLoadingText('Loading Captain Panel...');

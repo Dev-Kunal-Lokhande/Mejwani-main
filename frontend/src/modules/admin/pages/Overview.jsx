@@ -20,7 +20,8 @@ import {
   FileText,
   X,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Languages
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -54,16 +55,158 @@ axios.interceptors.request.use((config) => {
   return config;
 });
 
+const TRANSLATIONS = {
+  en: {
+    dashboardTitle: 'AI Analytics Dashboard',
+    dashboardSubtitle: 'Real-time performance and smart insights',
+    reportsBtn: 'Reports',
+    timeframes: { today: 'Today', week: 'Week', month: 'Month', year: 'Year' },
+    todaySales: "Today's Sales",
+    weeklySales: 'Weekly Sales',
+    monthlySales: 'Monthly Sales',
+    yearlySales: 'Yearly Sales',
+    vsLastPeriod: 'vs last period',
+    revenueTrend: 'Revenue Trend',
+    revenueSubtitle: 'Hotel vs Parcel performance',
+    dineIn: 'Dine-in',
+    parcel: 'Parcel',
+    revenueSplit: 'Revenue Split',
+    smartInsights: 'Smart Insights',
+    topSellingItems: 'Top Selling Items',
+    itemName: 'Item Name',
+    orders: 'Orders',
+    revenue: 'Revenue',
+    popularity: 'Popularity',
+    noDataTimeframe: 'No data available for this timeframe',
+    peakHours: 'Peak Hours Analysis',
+    operationsPulse: 'Operations Pulse',
+    live: 'LIVE',
+    activeTables: 'Active Tables',
+    kitchenQueue: 'Kitchen Queue',
+    pending: 'pending',
+    staffOnline: 'Staff Online',
+    itemSalesReport: 'Item Sales Report',
+    itemSalesSubtitle: 'View and download category-wise item sales reports within custom ranges',
+    to: 'to',
+    generateReport: 'Generate Report',
+    loading: 'Loading...',
+    exportCsv: 'Export CSV',
+    grandTotalRevenue: 'Grand Total Revenue',
+    aggregatedCategories: 'Aggregated across all food categories',
+    dishName: 'Dish Name',
+    quantity: 'Quantity',
+    totalPrice: 'Total Price',
+    subtotal: 'Subtotal',
+    itemsCount: 'items',
+    fromDate: 'From Date',
+    toDate: 'To Date',
+    runReport: 'Run Report',
+    downloadCsv: 'Download CSV',
+    close: 'Close',
+    filterExportMetrics: 'Filter and export operational metrics',
+    reportMenu: {
+      'daily-sales': 'Daily Sales Report',
+      'day-end': 'Day-End Summary',
+      'payment-summary': 'Payment Summary',
+      'item-wise': 'Item-wise Sales',
+      'category-wise': 'Category-wise Sales',
+      'captain-performance': 'Captain Performance',
+      'customer-visits': 'Customer Visit Report'
+    }
+  },
+  mr: {
+    dashboardTitle: 'AI ॲनालिटिक्स डॅशबोर्ड',
+    dashboardSubtitle: 'रिअल-टाइम कामगिरी आणि स्मार्ट विश्लेषण',
+    reportsBtn: 'रिपोर्ट्स',
+    timeframes: { today: 'आज', week: 'आठवडा', month: 'महिना', year: 'वर्ष' },
+    todaySales: 'आजची विक्री',
+    weeklySales: 'साप्ताहिक विक्री',
+    monthlySales: 'मासिक विक्री',
+    yearlySales: 'वार्षिक विक्री',
+    vsLastPeriod: 'मागील कालावधीच्या तुलनेत',
+    revenueTrend: 'उत्पन्नाचा कल (Revenue Trend)',
+    revenueSubtitle: 'हॉटेल डायनिंग विरुद्ध पार्सल कामगिरी',
+    dineIn: 'डायनिंग (हॉटेल)',
+    parcel: 'पार्सल',
+    revenueSplit: 'उत्पन्न विभागणी',
+    smartInsights: 'स्मार्ट इनसाइट्स',
+    topSellingItems: 'सर्वाधिक विकले जाणारे पदार्थ',
+    itemName: 'पदार्थाचे नाव',
+    orders: 'ऑर्डर्स',
+    revenue: 'उत्पन्न',
+    popularity: 'लोकप्रियता',
+    noDataTimeframe: 'या कालावधीसाठी डेटा उपलब्ध नाही',
+    peakHours: 'गर्दीच्या वेळांचे विश्लेषण (Peak Hours)',
+    operationsPulse: 'लाइव्ह कामकाज स्थिती',
+    live: 'लाइव्ह',
+    activeTables: 'सक्रिय टेबल्स',
+    kitchenQueue: 'किचन रांग',
+    pending: 'प्रलंबित',
+    staffOnline: 'उपस्थित स्टाफ',
+    itemSalesReport: 'पदार्थनिहाय विक्री अहवाल',
+    itemSalesSubtitle: 'निवडलेल्या तारखेनुसार श्रेणीनिहाय विक्री अहवाल पहा आणि डाउनलोड करा',
+    to: 'ते',
+    generateReport: 'अहवाल तयार करा',
+    loading: 'लोड होत आहे...',
+    exportCsv: 'CSV डाउनलोड करा',
+    grandTotalRevenue: 'एकूण उत्पन्न (Grand Total)',
+    aggregatedCategories: 'सर्व खाद्य श्रेणींची एकत्रित बेरीज',
+    dishName: 'पदार्थाचे नाव',
+    quantity: 'नग (Quantity)',
+    totalPrice: 'एकूण रक्कम',
+    subtotal: 'उप-बेरीज',
+    itemsCount: 'पदार्थ',
+    fromDate: 'पासून (From)',
+    toDate: 'पर्यंत (To)',
+    runReport: 'रिपोर्ट पहा',
+    downloadCsv: 'CSV डाउनलोड करा',
+    close: 'बंद करा',
+    filterExportMetrics: 'तारीख निवडून अहवाल पहा आणि डाउनलोड करा',
+    reportMenu: {
+      'daily-sales': 'दैनंदिन विक्री अहवाल',
+      'day-end': 'दिवसअखेर सारांश (Day-End)',
+      'payment-summary': 'पेमेंट पद्धत सारांश',
+      'item-wise': 'पदार्थनिहाय विक्री',
+      'category-wise': 'श्रेणीनिहाय विक्री',
+      'captain-performance': 'कॅप्टन कामगिरी अहवाल',
+      'customer-visits': 'ग्राहक भेट अहवाल'
+    }
+  }
+};
+
+// Translate backend Smart Insights sentences into Marathi when lang === 'mr'
+const translateInsight = (text, lang) => {
+  if (lang !== 'mr' || !text) return text;
+  if (text.includes('No orders recorded yet today')) {
+    return 'आज अद्याप कोणतीही ऑर्डर नोंदवली गेलेली नाही. सेवेसाठी सज्ज!';
+  }
+  const todayMatch = text.match(/Today you processed (\d+) orders worth ₹(\d+)/);
+  if (todayMatch) {
+    return `आज तुम्ही ₹${todayMatch[2]} किमतीच्या एकूण ${todayMatch[1]} ऑर्डर्स पूर्ण केल्या आहेत.`;
+  }
+  const monthMatch = text.match(/Monthly revenue stands at ₹(\d+)/);
+  if (monthMatch) {
+    return `सक्रिय कामकाजातून या महिन्याचे एकूण उत्पन्न ₹${monthMatch[1]} इतके झाले आहे.`;
+  }
+  if (text.includes('Track peak hours below')) {
+    return 'किचन आणि कॅप्टन स्टाफचे योग्य नियोजन करण्यासाठी खालील गर्दीच्या वेळा (Peak Hours) तपासा.';
+  }
+  return text;
+};
+
 export default function AdminOverview() {
   const { isDarkMode } = useTheme();
+  const [lang, setLang] = useState(() => localStorage.getItem('mejwani_dashboard_lang') || 'en');
+  const t = TRANSLATIONS[lang] || TRANSLATIONS.en;
+
+  const toggleLanguage = () => {
+    const next = lang === 'en' ? 'mr' : 'en';
+    setLang(next);
+    localStorage.setItem('mejwani_dashboard_lang', next);
+  };
+
   const [timeframe, setTimeframe] = useState('today');
   const [loading, setLoading] = useState(true);
-  
-  // Active Captain Requests state removed (handled via standard notifications page)
-
-  // fetchCaptainRequests and handleAcknowledge removed (using standard notifications page)
-
-  // Socket listeners and speech synthesis for captain requests removed from component body (handled globally in realtimeAlerts.js)
   
   // Data states
   const [analytics, setAnalytics] = useState(null);
@@ -115,26 +258,25 @@ export default function AdminOverview() {
       setReportError(null);
       const baseUrl = API_BASE;
       const response = await axios.get(`${baseUrl}/dashboard/item-sales-report?startDate=${reportStartDate}&endDate=${reportEndDate}`);
- if (response.data.success) {
-  const data = response.data?.data;
-  const categories = Array.isArray(data?.categories)
-    ? data.categories
-    : [];
+      if (response.data.success) {
+        const data = response.data?.data;
+        const categories = Array.isArray(data?.categories)
+          ? data.categories
+          : [];
 
-  setReportData({ ...data, categories });
+        setReportData({ ...data, categories });
 
-  const initialExpanded = {};
+        const initialExpanded = {};
+        categories.forEach((cat) => {
+          initialExpanded[cat.categoryName] = true;
+        });
 
-  categories.forEach((cat) => {
-    initialExpanded[cat.categoryName] = true;
-  });
-
-  setExpandedCategories(initialExpanded);
-} else {
-  setReportError(
-    response.data.message || "Failed to fetch report"
-  );
-}
+        setExpandedCategories(initialExpanded);
+      } else {
+        setReportError(
+          response.data.message || "Failed to fetch report"
+        );
+      }
     } catch (err) {
       console.error('Error fetching item sales report:', err);
       setReportError(err.response?.data?.message || 'Error fetching report');
@@ -146,7 +288,6 @@ export default function AdminOverview() {
   const downloadCSVReport = () => {
     if (!reportData || !reportData.categories) return;
     
-    // CSV headers
     const headers = ['Category', 'Item Name', 'Quantity Sold', 'Subtotal (₹)'];
     const rows = [];
     
@@ -159,7 +300,6 @@ export default function AdminOverview() {
           item.subtotal
         ]);
       });
-      // Category total
       rows.push([
         `${cat.categoryName} Total`,
         '',
@@ -168,7 +308,6 @@ export default function AdminOverview() {
       ]);
     });
     
-    // Grand total
     rows.push([]);
     rows.push(['Grand Total', '', '', reportData.grandTotal]);
     
@@ -320,7 +459,6 @@ export default function AdminOverview() {
   const chartStroke = isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)";
   const tickColor = isDarkMode ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.7)";
   
-  // Theme colors
   const COLORS = {
     primary: '#ff6b00',
     secondary: '#8b5cf6',
@@ -344,7 +482,6 @@ export default function AdminOverview() {
 
   useEffect(() => {
     fetchDashboardData();
-    // Set up polling for live operations panel
     const interval = setInterval(() => {
       fetchLiveOperations();
     }, 10000);
@@ -367,7 +504,6 @@ export default function AdminOverview() {
         axios.get(`${baseUrl}/dashboard/peak-hours?timeframe=${timeframe}`)
       ]);
 
-      // Handle both {success, data: [...]} and plain array responses
       const safeArray = (res) => {
         const d = res?.data;
         if (!d) return [];
@@ -388,7 +524,6 @@ export default function AdminOverview() {
       setTopItems(safeArray(topItemsRes));
       setPeakHours(safeArray(peakHoursRes));
       
-      // Also fetch initial live operations
       fetchLiveOperations();
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -401,10 +536,6 @@ export default function AdminOverview() {
     try {
       const baseUrl = API_BASE;
       
-      let queueData = [];
-      let allTables = [];
-      let allStaff = [];
-
       const promises = [
         axios.get(`${baseUrl}/tables`),
         axios.get(`${baseUrl}/staff`),
@@ -412,9 +543,9 @@ export default function AdminOverview() {
       ];
 
       const results = await Promise.all(promises);
-      allTables = results[0]?.data?.data || [];
-      allStaff = results[1]?.data?.data || [];
-      queueData = results[2]?.data?.data || [];
+      const allTables = results[0]?.data?.data || [];
+      const allStaff = results[1]?.data?.data || [];
+      const queueData = results[2]?.data?.data || [];
 
       setKitchenQueue(queueData);
       
@@ -428,10 +559,8 @@ export default function AdminOverview() {
     }
   };
 
-  // Helper for formatting currency
-  const formatCurrency = (val) => `₹${Number(val).toLocaleString()}`;
+  const formatCurrency = (val) => `₹${Number(val || 0).toLocaleString()}`;
   
-  // Custom Card Component
   const MetricCard = ({ title, value, icon: Icon, trend, color, delay }) => (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -450,13 +579,13 @@ export default function AdminOverview() {
         </div>
       </div>
       
-      {trend && (
+      {trend !== undefined && trend !== null && trend !== 0 && (
         <div className="flex items-center gap-2 mt-4">
           <div className={`flex items-center gap-1 text-sm font-bold px-2 py-1 rounded-full ${trend > 0 ? 'text-emerald-600 bg-emerald-500/10' : 'text-rose-600 bg-rose-500/10'}`}>
             {trend > 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
             {Math.abs(trend)}%
           </div>
-          <span className="text-xs text-slate-500 dark:text-slate-400">vs last period</span>
+          <span className="text-xs text-slate-500 dark:text-slate-400">{t.vsLastPeriod}</span>
         </div>
       )}
     </motion.div>
@@ -469,43 +598,55 @@ export default function AdminOverview() {
         {/* Header & Controls */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-extrabold bg-gradient-to-r from-primary to-orange-400 bg-clip-text text-transparent">AI Analytics Dashboard</h1>
-            <p className="text-slate-600 dark:text-slate-400 font-medium">Real-time performance and smart insights</p>
+            <h1 className="text-3xl font-extrabold bg-gradient-to-r from-primary to-orange-400 bg-clip-text text-transparent">
+              {t.dashboardTitle}
+            </h1>
+            <p className="text-slate-600 dark:text-slate-400 font-medium">{t.dashboardSubtitle}</p>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Language Toggle Button */}
+            <button
+              onClick={toggleLanguage}
+              title="Switch Language / भाषा बदला"
+              className="flex items-center gap-2 px-3.5 py-2.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary hover:text-primary transition-all cursor-pointer shadow-sm text-sm"
+            >
+              <Languages className="w-4 h-4 text-primary" />
+              <span>{lang === 'en' ? 'मराठी' : 'English'}</span>
+            </button>
+
             <div className="relative">
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all cursor-pointer shadow-sm text-sm"
               >
                 <FileText className="w-4 h-4 text-orange-500" />
-                Reports
+                {t.reportsBtn}
                 <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`} />
               </button>
               
               {dropdownOpen && (
                 <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 z-50 py-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
                   {[
-                    { id: 'daily-sales', title: 'Daily Sales Report' },
-                    { id: 'day-end', title: 'Day-End Summary' },
-                    { id: 'payment-summary', title: 'Payment Summary' },
-                    { id: 'item-wise', title: 'Item-wise Sales' },
-                    { id: 'category-wise', title: 'Category-wise Sales' },
-                    { id: 'captain-performance', title: 'Captain Performance' },
-                    { id: 'customer-visits', title: 'Customer Visit Report' }
-                  ].map(rep => (
+                    'daily-sales',
+                    'day-end',
+                    'payment-summary',
+                    'item-wise',
+                    'category-wise',
+                    'captain-performance',
+                    'customer-visits'
+                  ].map(id => (
                     <button
-                      key={rep.id}
+                      key={id}
                       onClick={() => {
                         setDropdownOpen(false);
-                        setActiveReport(rep.id);
-                        setActiveReportTitle(rep.title);
-                        fetchReport(rep.id, reportsFromDate, reportsToDate);
+                        setActiveReport(id);
+                        setActiveReportTitle(t.reportMenu[id]);
+                        fetchReport(id, reportsFromDate, reportsToDate);
                       }}
                       className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-orange-500 transition-all block cursor-pointer"
                     >
-                      {rep.title}
+                      {t.reportMenu[id]}
                     </button>
                   ))}
                 </div>
@@ -513,26 +654,24 @@ export default function AdminOverview() {
             </div>
 
             <div className="flex items-center bg-white dark:bg-slate-800 rounded-xl p-1 shadow-sm border border-slate-200 dark:border-slate-700 w-fit">
-              {['today', 'week', 'month', 'year'].map(t => (
+              {['today', 'week', 'month', 'year'].map(tf => (
                 <button
-                  key={t}
-                  onClick={() => setTimeframe(t)}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold capitalize transition-all ${timeframe === t ? 'bg-primary text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                  key={tf}
+                  onClick={() => setTimeframe(tf)}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${timeframe === tf ? 'bg-primary text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
                 >
-                  {t}
+                  {t.timeframes[tf]}
                 </button>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Active captain calls section removed (using standard notifications page only) */}
-
         {/* Top Metric Cards */}
         {analytics && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <MetricCard 
-              title="Today's Sales" 
+              title={t.todaySales} 
               value={formatCurrency(analytics.todaySales)} 
               icon={DollarSign} 
               trend={analytics.todayGrowth}
@@ -540,7 +679,7 @@ export default function AdminOverview() {
               delay={0.1}
             />
             <MetricCard 
-              title="Weekly Sales" 
+              title={t.weeklySales} 
               value={formatCurrency(analytics.weeklySales)} 
               icon={Activity} 
               trend={analytics.weeklyGrowth}
@@ -548,14 +687,14 @@ export default function AdminOverview() {
               delay={0.2}
             />
             <MetricCard 
-              title="Monthly Sales" 
+              title={t.monthlySales} 
               value={formatCurrency(analytics.monthlySales)} 
               icon={ShoppingBag} 
               color={COLORS.info}
               delay={0.3}
             />
             <MetricCard 
-              title="Yearly Sales" 
+              title={t.yearlySales} 
               value={formatCurrency(analytics.yearlySales)} 
               icon={Zap} 
               trend={analytics.yearlyGrowth}
@@ -576,10 +715,10 @@ export default function AdminOverview() {
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  Revenue Trend
+                  {t.revenueTrend}
                   {loading && <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />}
                 </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Hotel vs Parcel performance</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{t.revenueSubtitle}</p>
               </div>
             </div>
             
@@ -608,21 +747,21 @@ export default function AdminOverview() {
                       color: isDarkMode ? '#fff' : '#0f172a'
                     }}
                   />
-                  <Area type="monotone" name="Dine-in" dataKey="hotelRevenue" stroke={COLORS.hotel} strokeWidth={3} fill="url(#colorHotel)" />
-                  <Area type="monotone" name="Parcel" dataKey="parcelRevenue" stroke={COLORS.parcel} strokeWidth={3} fill="url(#colorParcel)" />
+                  <Area type="monotone" name={t.dineIn} dataKey="hotelRevenue" stroke={COLORS.hotel} strokeWidth={3} fill="url(#colorHotel)" />
+                  <Area type="monotone" name={t.parcel} dataKey="parcelRevenue" stroke={COLORS.parcel} strokeWidth={3} fill="url(#colorParcel)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </motion.div>
 
-          {/* Hotel vs Parcel Split & AI Insights */}
+          {/* Hotel vs Parcel Split */}
           <div className="flex flex-col gap-6">
             <motion.div 
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               className="glass-card p-6"
             >
-              <h3 className="text-lg font-bold mb-6 text-slate-900 dark:text-white">Revenue Split</h3>
+              <h3 className="text-lg font-bold mb-6 text-slate-900 dark:text-white">{t.revenueSplit}</h3>
               {analytics && (
                 <div className="space-y-6">
                   <div className="h-[200px]">
@@ -630,8 +769,8 @@ export default function AdminOverview() {
                       <PieChart>
                         <Pie
                           data={[
-                            { name: 'Dine-in', value: totalHotelRevenue },
-                            { name: 'Parcel', value: totalParcelRevenue }
+                            { name: t.dineIn, value: totalHotelRevenue },
+                            { name: t.parcel, value: totalParcelRevenue }
                           ]}
                           cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value"
                         >
@@ -647,7 +786,7 @@ export default function AdminOverview() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                        <span className="text-sm font-medium">Dine-in</span>
+                        <span className="text-sm font-medium">{t.dineIn}</span>
                       </div>
                       <span className="font-bold">{formatCurrency(totalHotelRevenue)}</span>
                     </div>
@@ -658,7 +797,7 @@ export default function AdminOverview() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full bg-blue-500" />
-                        <span className="text-sm font-medium">Parcel</span>
+                        <span className="text-sm font-medium">{t.parcel}</span>
                       </div>
                       <span className="font-bold">{formatCurrency(totalParcelRevenue)}</span>
                     </div>
@@ -679,16 +818,24 @@ export default function AdminOverview() {
             animate={{ opacity: 1, y: 0 }}
             className="lg:col-span-1 glass-card p-6 border-t-4 border-t-secondary"
           >
-            <div className="flex items-center gap-2 mb-6">
-              <div className="p-2 bg-secondary/10 rounded-lg text-secondary">
-                <Zap className="w-5 h-5" />
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-secondary/10 rounded-lg text-secondary">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">{t.smartInsights}</h3>
               </div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Smart Insights</h3>
+              <button
+                onClick={toggleLanguage}
+                className="text-xs font-bold px-2.5 py-1 rounded-lg bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors cursor-pointer"
+              >
+                {lang === 'en' ? 'मराठी' : 'EN'}
+              </button>
             </div>
             
             <div className="space-y-4">
               <AnimatePresence>
-               {(analytics?.insights ?? []).map((insight, idx) => (
+                {(analytics?.insights ?? []).map((insight, idx) => (
                   <motion.div 
                     key={idx}
                     initial={{ opacity: 0, x: -20 }}
@@ -696,7 +843,9 @@ export default function AdminOverview() {
                     transition={{ delay: idx * 0.1 }}
                     className="p-4 rounded-xl bg-slate-50/50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700"
                   >
-                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">"{insight}"</p>
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {translateInsight(insight, lang)}
+                    </p>
                   </motion.div>
                 ))}
               </AnimatePresence>
@@ -713,7 +862,7 @@ export default function AdminOverview() {
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Utensils className="w-5 h-5 text-primary" />
-                Top Selling Items
+                {t.topSellingItems}
               </h3>
             </div>
             
@@ -721,10 +870,10 @@ export default function AdminOverview() {
               <table className="w-full text-left">
                 <thead>
                   <tr className="text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
-                    <th className="pb-3 font-semibold text-sm">Item Name</th>
-                    <th className="pb-3 font-semibold text-sm text-center">Orders</th>
-                    <th className="pb-3 font-semibold text-sm text-right">Revenue</th>
-                    <th className="pb-3 font-semibold text-sm text-center">Popularity</th>
+                    <th className="pb-3 font-semibold text-sm">{t.itemName}</th>
+                    <th className="pb-3 font-semibold text-sm text-center">{t.orders}</th>
+                    <th className="pb-3 font-semibold text-sm text-right">{t.revenue}</th>
+                    <th className="pb-3 font-semibold text-sm text-center">{t.popularity}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -751,7 +900,7 @@ export default function AdminOverview() {
                   ))}
                   {topItems.length === 0 && (
                     <tr>
-                      <td colSpan="4" className="py-8 text-center text-slate-500">No data available for this timeframe</td>
+                      <td colSpan="4" className="py-8 text-center text-slate-500">{t.noDataTimeframe}</td>
                     </tr>
                   )}
                 </tbody>
@@ -768,7 +917,7 @@ export default function AdminOverview() {
             animate={{ opacity: 1, y: 0 }}
             className="lg:col-span-2 glass-card p-6"
           >
-            <h3 className="text-lg font-bold mb-6 text-slate-900 dark:text-white">Peak Hours Analysis</h3>
+            <h3 className="text-lg font-bold mb-6 text-slate-900 dark:text-white">{t.peakHours}</h3>
             <div className="h-[250px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={peakHours}>
@@ -783,7 +932,7 @@ export default function AdminOverview() {
                       color: isDarkMode ? '#fff' : '#000'
                     }}
                   />
-                  <Bar dataKey="orders" fill={COLORS.primary} radius={[4, 4, 0, 0]} />
+                  <Bar name={t.orders} dataKey="orders" fill={COLORS.primary} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -797,11 +946,11 @@ export default function AdminOverview() {
             <div className="absolute top-0 right-0 p-4">
               <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold animate-pulse">
                 <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                LIVE
+                {t.live}
               </div>
             </div>
             
-            <h3 className="text-xl font-bold mb-6">Operations Pulse</h3>
+            <h3 className="text-xl font-bold mb-6">{t.operationsPulse}</h3>
             
             <div className="space-y-6">
               <div className="flex items-center justify-between p-4 bg-white/10 rounded-xl border border-white/5 backdrop-blur-md">
@@ -810,7 +959,7 @@ export default function AdminOverview() {
                     <Table className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-xs text-white/60 uppercase tracking-wider font-semibold">Active Tables</p>
+                    <p className="text-xs text-white/60 uppercase tracking-wider font-semibold">{t.activeTables}</p>
                     <p className="text-xl font-bold">{activeTables.occupied} / {activeTables.total}</p>
                   </div>
                 </div>
@@ -825,8 +974,8 @@ export default function AdminOverview() {
                     <Utensils className="w-5 h-5 text-orange-400" />
                   </div>
                   <div>
-                    <p className="text-xs text-white/60 uppercase tracking-wider font-semibold">Kitchen Queue</p>
-                    <p className="text-xl font-bold">{kitchenQueue.length} <span className="text-sm font-normal text-white/60">pending</span></p>
+                    <p className="text-xs text-white/60 uppercase tracking-wider font-semibold">{t.kitchenQueue}</p>
+                    <p className="text-xl font-bold">{kitchenQueue.length} <span className="text-sm font-normal text-white/60">{t.pending}</span></p>
                   </div>
                 </div>
               </div>
@@ -837,7 +986,7 @@ export default function AdminOverview() {
                     <Users className="w-5 h-5 text-blue-400" />
                   </div>
                   <div>
-                    <p className="text-xs text-white/60 uppercase tracking-wider font-semibold">Staff Online</p>
+                    <p className="text-xs text-white/60 uppercase tracking-wider font-semibold">{t.staffOnline}</p>
                     <p className="text-xl font-bold">{activeStaff}</p>
                   </div>
                 </div>
@@ -858,9 +1007,9 @@ export default function AdminOverview() {
             <div>
               <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" />
-                Item Sales Report
+                {t.itemSalesReport}
               </h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">View and download category-wise item sales reports within custom ranges</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{t.itemSalesSubtitle}</p>
             </div>
             
             <div className="flex flex-wrap items-center gap-3">
@@ -872,7 +1021,7 @@ export default function AdminOverview() {
                   onChange={(e) => setReportStartDate(e.target.value)}
                   className="bg-transparent border-none text-sm font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-0 cursor-pointer"
                 />
-                <span className="text-slate-400 font-medium">to</span>
+                <span className="text-slate-400 font-medium">{t.to}</span>
                 <input 
                   type="date" 
                   value={reportEndDate}
@@ -886,7 +1035,7 @@ export default function AdminOverview() {
                 disabled={reportLoading}
                 className="px-4 py-2 bg-primary hover:bg-primary/95 text-white font-bold text-sm rounded-lg shadow transition-colors disabled:opacity-50"
               >
-                {reportLoading ? 'Loading...' : 'Generate Report'}
+                {reportLoading ? t.loading : t.generateReport}
               </button>
 
               {reportData && reportData.categories && reportData.categories.length > 0 && (
@@ -895,7 +1044,7 @@ export default function AdminOverview() {
                   className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-lg shadow transition-colors"
                 >
                   <Download className="w-4 h-4" />
-                  Export CSV
+                  {t.exportCsv}
                 </button>
               )}
             </div>
@@ -937,13 +1086,13 @@ export default function AdminOverview() {
                                 {cat.categoryName}
                               </span>
                               <span className="text-xs bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded-full font-bold text-slate-600 dark:text-slate-400">
-                                {cat.items.length} items
+                                {cat.items.length} {t.itemsCount}
                               </span>
                             </div>
                             
                             <div className="flex items-center gap-4">
                               <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                                Subtotal: {formatCurrency(cat.categorySubtotal)}
+                                {t.subtotal}: {formatCurrency(cat.categorySubtotal)}
                               </span>
                               {isExpanded ? (
                                 <ChevronUp className="w-4 h-4 text-slate-500" />
@@ -958,9 +1107,9 @@ export default function AdminOverview() {
                               <table className="w-full text-left">
                                 <thead>
                                   <tr className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-wider">
-                                    <th className="pb-2">Dish Name</th>
-                                    <th className="pb-2 text-center w-24">Quantity</th>
-                                    <th className="pb-2 text-right w-36">Total Price</th>
+                                    <th className="pb-2">{t.dishName}</th>
+                                    <th className="pb-2 text-center w-24">{t.quantity}</th>
+                                    <th className="pb-2 text-right w-36">{t.totalPrice}</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -983,8 +1132,8 @@ export default function AdminOverview() {
                   {/* Grand Total Bar */}
                   <div className="flex items-center justify-between p-5 bg-gradient-to-r from-primary/10 to-orange-500/10 border border-primary/20 rounded-2xl">
                     <div>
-                      <span className="font-extrabold text-slate-800 dark:text-slate-200 text-lg">Grand Total Revenue</span>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Aggregated across all food categories</p>
+                      <span className="font-extrabold text-slate-800 dark:text-slate-200 text-lg">{t.grandTotalRevenue}</span>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{t.aggregatedCategories}</p>
                     </div>
                     <span className="text-2xl font-black text-primary">
                       {formatCurrency(reportData.grandTotal)}
@@ -1007,7 +1156,7 @@ export default function AdminOverview() {
                     {activeReportTitle}
                   </h3>
                   <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-wider mt-0.5">
-                    Filter and export operational metrics
+                    {t.filterExportMetrics}
                   </p>
                 </div>
                 <button 
@@ -1024,7 +1173,7 @@ export default function AdminOverview() {
               {/* Date Filters Row */}
               <div className="flex flex-col sm:flex-row items-end gap-4 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
                 <div className="flex-1 flex flex-col gap-1 w-full">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">From Date</label>
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">{t.fromDate}</label>
                   <input
                     type="date"
                     value={reportsFromDate}
@@ -1033,7 +1182,7 @@ export default function AdminOverview() {
                   />
                 </div>
                 <div className="flex-1 flex flex-col gap-1 w-full">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">To Date</label>
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">{t.toDate}</label>
                   <input
                     type="date"
                     value={reportsToDate}
@@ -1045,7 +1194,7 @@ export default function AdminOverview() {
                   onClick={() => fetchReport(activeReport, reportsFromDate, reportsToDate)}
                   className="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/10 cursor-pointer w-full sm:w-auto"
                 >
-                  Run Report
+                  {t.runReport}
                 </button>
               </div>
 
@@ -1068,8 +1217,6 @@ export default function AdminOverview() {
                   </div>
                 ) : (
                   <div>
-                    {/* Render Tables dynamically based on activeReport */}
-                    
                     {/* 1. Daily Sales Report Table */}
                     {activeReport === 'daily-sales' && (
                       <table className="w-full text-left border-collapse text-xs">
@@ -1258,7 +1405,7 @@ export default function AdminOverview() {
                   className="flex items-center justify-center gap-1.5 px-5 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-orange-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download className="w-4 h-4" />
-                  Download CSV
+                  {t.downloadCsv}
                 </button>
                 <button
                   onClick={() => {
@@ -1267,7 +1414,7 @@ export default function AdminOverview() {
                   }}
                   className="px-6 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
                 >
-                  Close
+                  {t.close}
                 </button>
               </div>
 

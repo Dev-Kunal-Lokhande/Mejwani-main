@@ -1,11 +1,16 @@
 package com.mejwani.controller;
 
-import com.mejwani.entity.*;
-import com.mejwani.repository.*;
+import com.mejwani.entity.Hotel;
+import com.mejwani.entity.RestaurantTable;
+import com.mejwani.entity.Section;
+import com.mejwani.repository.HotelRepository;
+import com.mejwani.repository.RestaurantTableRepository;
+import com.mejwani.repository.SectionRepository;
 import com.mejwani.security.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -40,16 +45,19 @@ public class TableController {
         payload.put("id", table.getId());
         payload.put("table_number", table.getTableNumber());
         payload.put("table_name", table.getTableName());
-        payload.put("status", table.getStatus());
+        payload.put("status", table.getStatus() != null ? table.getStatus().toLowerCase() : "available");
         payload.put("qr_code", table.getQrCode());
         payload.put("hotel_id", table.getHotel() != null ? table.getHotel().getId() : null);
         payload.put("section_id", table.getSection() != null ? table.getSection().getId() : null);
         payload.put("section_name", table.getSection() != null ? table.getSection().getSectionName() : "");
         payload.put("seating_capacity", 4);
+        payload.put("is_active", true);
+        payload.put("display_order", table.getId() != null ? table.getId().intValue() : 0);
         return payload;
     }
 
     @GetMapping
+    @Transactional(readOnly = true)
     public ResponseEntity<?> getTables(@RequestParam(required = false) Long hotelId,
                                        @RequestParam(required = false) Long sectionId,
                                        HttpServletRequest request) {
@@ -58,19 +66,16 @@ public class TableController {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "hotelId is required"));
         }
 
-        List<Map<String, Object>> data;
-        if (sectionId != null) {
-            data = tableRepository.findByHotelIdAndSectionId(resolvedHotelId, sectionId)
-                    .stream().map(this::serializeTable).toList();
-        } else {
-            data = tableRepository.findByHotelId(resolvedHotelId)
-                    .stream().map(this::serializeTable).toList();
-        }
+        List<RestaurantTable> tables = (sectionId != null)
+                ? tableRepository.findByHotelIdAndSectionId(resolvedHotelId, sectionId)
+                : tableRepository.findByHotelId(resolvedHotelId);
 
+        var data = tables.stream().map(this::serializeTable).toList();
         return ResponseEntity.ok(Map.of("success", true, "data", data));
     }
 
     @PostMapping
+    @Transactional
     public ResponseEntity<?> createTable(@RequestBody Map<String, Object> body,
                                          HttpServletRequest request) {
         Long hotelId = body.containsKey("hotelId") ? Long.valueOf(body.get("hotelId").toString())
@@ -96,9 +101,24 @@ public class TableController {
                 .qrCode(UUID.randomUUID().toString())
                 .build();
 
+        boolean isParcel = Boolean.TRUE.equals(body.get("is_parcel")) || Boolean.TRUE.equals(body.get("isParcel"));
+
         Object sectionValue = body.get("section_id");
         if (sectionValue == null) sectionValue = body.get("sectionId");
-        if (sectionValue != null) {
+
+        if (isParcel) {
+            Section parcelSection = sectionRepository.findAll().stream()
+                    .filter(s -> s.getHotel() != null && hotelId.equals(s.getHotel().getId())
+                            && "PARCEL".equalsIgnoreCase(s.getSectionName()))
+                    .findFirst()
+                    .orElseGet(() -> sectionRepository.save(
+                            Section.builder()
+                                    .sectionName("PARCEL")
+                                    .hotel(hotel)
+                                    .build()
+                    ));
+            table.setSection(parcelSection);
+        } else if (sectionValue != null) {
             Long sectionId = Long.valueOf(sectionValue.toString());
             sectionRepository.findById(sectionId).ifPresent(table::setSection);
         }
@@ -108,6 +128,7 @@ public class TableController {
     }
 
     @PutMapping("/{id}")
+    @Transactional
     public ResponseEntity<?> updateTable(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         return tableRepository.findById(id).map(table -> {
             if (body.containsKey("table_name") || body.containsKey("tableName")) {
@@ -133,6 +154,7 @@ public class TableController {
     }
 
     @DeleteMapping("/{id}")
+    @Transactional
     public ResponseEntity<?> deleteTable(@PathVariable Long id) {
         if (!tableRepository.existsById(id)) {
             return ResponseEntity.notFound().build();

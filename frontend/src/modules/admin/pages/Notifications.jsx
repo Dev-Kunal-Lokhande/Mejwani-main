@@ -29,6 +29,10 @@ const initialNotifications = [
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState(initialNotifications);
 
+  // track timeouts for auto-expiring notifications so we can cancel them
+  const timersRef = useRef({});
+  const lastReceivedRequests = useRef({});
+
   // =========================
   // SOUND EFFECT
   // =========================
@@ -106,13 +110,11 @@ export default function NotificationsPage() {
         id: notifId,
         type: 'order',
         title: `QR Order #${payload.orderId || 'NEW'}`,
-        // Include Order Type explicitly and Table Number in the message
         message: `Order Type: QR Order • Table ${payload.tableCode} — ${itemsText}`,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         unread: true,
       };
 
-      // Add notification (FIFO - added below existing ones)
       setNotifications((prev) => {
         const isDuplicate = prev.some(
           (n) => n.unread && n.message === notification.message && n.type === notification.type
@@ -121,16 +123,42 @@ export default function NotificationsPage() {
         return [...prev, notification];
       });
 
-      // Auto-expire notification after 60 seconds (60000 ms)
-      // Track the timeout so it can be cleared if user clears all notifications
       const timeoutId = setTimeout(() => {
         setNotifications((prev) => prev.filter((n) => n.id !== notifId));
-        // remove from tracking
         try { delete timersRef.current[notifId]; } catch (e) {}
       }, 60000);
 
-      // store timeout id for potential cleanup
       timersRef.current[notifId] = timeoutId;
+    };
+
+    // =========================
+    // ORDER READY (FROM KITCHEN)
+    // =========================
+    const handleOrderReady = (payload) => {
+      if (!payload) return;
+      if (payload.status && payload.status !== 'READY') return;
+
+      const uniqueKey = `ready-${payload.orderId || payload.kotNumber}-${payload.tableName}`;
+      if (processedRequests.has(uniqueKey)) return;
+      processedRequests.add(uniqueKey);
+      setTimeout(() => processedRequests.delete(uniqueKey), 10000);
+
+      playServiceChime();
+
+      const tName = payload.tableName || payload.table_name || 'Table';
+      speakNotification(`Order for ${tName} is ready to serve.`);
+
+      const notifId = `socket-ready-${Date.now()}`;
+      const notification = {
+        id: notifId,
+        type: 'system',
+        title: `Order Ready — ${tName}`,
+        message: `🍽️ ${payload.kotNumber || 'Order'} for ${tName} is ready in the kitchen!`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        unread: true,
+      };
+
+      setNotifications((prev) => [notification, ...prev]);
     };
 
     // =========================
@@ -141,7 +169,6 @@ export default function NotificationsPage() {
       if (processedRequests.has(payload.requestId)) return;
       processedRequests.add(payload.requestId);
 
-      const isCaptain = payload.requestType === 'Call Captain' || payload.requestType === 'Captain Requested';
       let notifTitle = '';
       let notifMessage = '';
 
@@ -184,7 +211,6 @@ export default function NotificationsPage() {
         unread: true,
       };
 
-      // Service requests do NOT auto-expire — leave them until user clears or marks read (FIFO)
       setNotifications((prev) => {
         const isDuplicate = prev.some(
           (n) => n.unread && n.message === notification.message && n.type === notification.type
@@ -196,14 +222,17 @@ export default function NotificationsPage() {
 
     // SOCKET EVENTS
     socket.on('new-order', handleNewOrder);
+    socket.on('order-ready', handleOrderReady);
+    socket.on('order-updated', handleOrderReady);
     
     socket.off('customer_request');
     socket.on('customer_request', handleServiceRequest);
 
     return () => {
       socket.off('new-order', handleNewOrder);
+      socket.off('order-ready', handleOrderReady);
+      socket.off('order-updated', handleOrderReady);
       socket.off('customer_request', handleServiceRequest);
-      // clear any pending timers
       try {
         Object.values(timersRef.current || {}).forEach((tid) => clearTimeout(tid));
       } catch (e) {}
@@ -259,13 +288,11 @@ export default function NotificationsPage() {
   // ACTIONS
   // =========================
   const markAllRead = () => {
-    // use functional update to avoid stale state
     setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
   };
 
   const clearAll = () => {
     if (window.confirm('Clear all notifications?')) {
-      // clear UI notifications and cancel any pending auto-expire timers
       try {
         Object.values(timersRef.current || {}).forEach((tid) => clearTimeout(tid));
       } catch (e) {}
@@ -273,10 +300,6 @@ export default function NotificationsPage() {
       setNotifications([]);
     }
   };
-
-  // track timeouts for auto-expiring notifications so we can cancel them
-  const timersRef = useRef({});
-  const lastReceivedRequests = useRef({});
 
   const markAsRead = (id) => {
     setNotifications((prev) =>

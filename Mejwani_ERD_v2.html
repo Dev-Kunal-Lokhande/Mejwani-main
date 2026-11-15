@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:white; font-family:'Times New Roman',serif; }
+.topbar { background:#1e3a5f; color:white; padding:8px 14px; display:flex; justify-content:space-between; align-items:center; }
+.topbar h1 { font-size:13px; font-family:sans-serif; }
+.topbar button { background:#2563eb; color:white; border:none; padding:6px 16px; border-radius:5px; font-size:12px; cursor:pointer; font-family:sans-serif; }
+.page { width:297mm; margin:0 auto; background:white; padding:6mm 4mm; }
+h2 { text-align:center; font-size:13pt; font-weight:bold; margin-bottom:3mm; }
+svg { width:100%; height:auto; display:block; }
+@media print {
+  .topbar { display:none; }
+  .page { width:100%; padding:4mm; }
+  @page { size:A4 landscape; margin:0; }
+}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>🍽️ Mejwani — ERD (Entity Relationship Diagram)</h1>
+  <button onclick="window.print()">🖨️ Print / Save PDF (Landscape A4)</button>
+</div>
+<div class="page">
+  <h2>3.2 &nbsp; Entity Relationship Diagram (ERD) &nbsp;—&nbsp; Mejwani Restaurant Management System</h2>
+
+<svg viewBox="0 0 1150 800" xmlns="http://www.w3.org/2000/svg" font-family="'Times New Roman',serif" font-size="10">
+
+<!-- ═══════════════════════════════════════
+     RELATIONSHIP LINES
+═══════════════════════════════════════ -->
+
+<!-- Admin —[manages]— Hotel -->
+<line x1="175" y1="88" x2="260" y2="88" stroke="#000" stroke-width="1.2"/>
+<line x1="340" y1="88" x2="430" y2="88" stroke="#000" stroke-width="1.2"/>
+<text x="208" y="83" text-anchor="middle" font-size="9">M</text>
+<text x="415" y="83" text-anchor="middle" font-size="9">1</text>
+
+<!-- Hotel —[has_section]— Section -->
+<line x1="580" y1="88" x2="660" y2="88" stroke="#000" stroke-width="1.2"/>
+<line x1="740" y1="88" x2="820" y2="88" stroke="#000" stroke-width="1.2"/>
+<text x="600" y="83" text-anchor="middle" font-size="9">1</text>
+<text x="800" y="83" text-anchor="middle" font-size="9">M</text>
+
+<!-- Section —[contains]— RestaurantTable (vertical) -->
+<line x1="882" y1="112" x2="882" y2="175" stroke="#000" stroke-width="1.2"/>
+<line x1="882" y1="225" x2="882" y2="275" stroke="#000" stroke-width="1.2"/>
+<text x="894" y="145" text-anchor="middle" font-size="9">1</text>
+<text x="894" y="265" text-anchor="middle" font-size="9">M</text>
+
+<!-- Hotel —[has_category]— MenuCategory -->
+<line x1="430" y1="105" x2="430" y2="150" stroke="#000" stroke-width="1.2"/>
+<line x1="430" y1="150" x2="210" y2="150" stroke="#000" stroke-width="1.2"/>
+<line x1="210" y1="150" x2="210" y2="265" stroke="#000" stroke-width="1.2"/>
+<text x="430" y="143" text-anchor="middle" font-size="9">1</text>
+<text x="210" y="258" text-anchor="middle" font-size="9">M</text>
+
+<!-- Hotel —[employs]— Staff -->
+<line x1="580" y1="105" x2="580" y2="145" stroke="#000" stroke-width="1.2"/>
+<line x1="580" y1="145" x2="1000" y2="145" stroke="#000" stroke-width="1.2"/>
+<line x1="1000" y1="145" x2="1000" y2="275" stroke="#000" stroke-width="1.2"/>
+<text x="580" y="138" text-anchor="middle" font-size="9">1</text>
+<text x="1000" y="268" text-anchor="middle" font-size="9">M</text>
+<text x="790" y="138" text-anchor="middle" font-size="9" font-style="italic">employs</text>
+
+<!-- Hotel —[places]— Order (via diamond) -->
+<line x1="505" y1="112" x2="505" y2="195" stroke="#000" stroke-width="1.2"/>
+<line x1="505" y1="255" x2="505" y2="375" stroke="#000" stroke-width="1.2"/>
+<text x="518" y="165" text-anchor="middle" font-size="9">1</text>
+<text x="518" y="368" text-anchor="middle" font-size="9">M</text>
+
+<!-- RestaurantTable —[assigned]— Order -->
+<line x1="820" y1="315" x2="755" y2="315" stroke="#000" stroke-width="1.2"/>
+<line x1="665" y1="315" x2="580" y2="405" stroke="#000" stroke-width="1.2"/>
+<text x="800" y="308" text-anchor="middle" font-size="9">1</text>
+<text x="590" y="398" text-anchor="middle" font-size="9">M</text>
+
+<!-- MenuCategory —[has_item]— MenuItem (vertical) -->
+<line x1="175" y1="338" x2="175" y2="395" stroke="#000" stroke-width="1.2"/>
+<line x1="175" y1="445" x2="175" y2="510" stroke="#000" stroke-width="1.2"/>
+<text x="188" y="368" text-anchor="middle" font-size="9">1</text>
+<text x="188" y="500" text-anchor="middle" font-size="9">M</text>
+
+<!-- Order —[contains]— OrderItem (vertical) -->
+<line x1="505" y1="423" x2="505" y2="488" stroke="#000" stroke-width="1.2"/>
+<line x1="505" y1="538" x2="505" y2="580" stroke="#000" stroke-width="1.2"/>
+<text x="518" y="460" text-anchor="middle" font-size="9">1</text>
+<text x="518" y="572" text-anchor="middle" font-size="9">M</text>
+
+<!-- MenuItem —[listed_in]— OrderItem -->
+<line x1="250" y1="542" x2="310" y2="542" stroke="#000" stroke-width="1.2"/>
+<line x1="380" y1="542" x2="430" y2="615" stroke="#000" stroke-width="1.2"/>
+<text x="270" y="535" text-anchor="middle" font-size="9">M</text>
+<text x="440" y="608" text-anchor="middle" font-size="9">M</text>
+
+<!-- Order —[generates]— Bill -->
+<line x1="580" y1="405" x2="655" y2="440" stroke="#000" stroke-width="1.2"/>
+<line x1="735" y1="440" x2="820" y2="510" stroke="#000" stroke-width="1.2"/>
+<text x="600" y="420" text-anchor="middle" font-size="9">1</text>
+<text x="808" y="502" text-anchor="middle" font-size="9">1</text>
+
+<!-- ═══════════════════════════════════════
+     RELATIONSHIP DIAMONDS
+═══════════════════════════════════════ -->
+
+<!-- manages diamond -->
+<polygon points="260,88 300,70 340,88 300,106" fill="white" stroke="#000" stroke-width="1.3"/>
+<text x="300" y="92" text-anchor="middle" font-size="9" font-weight="bold">manages</text>
+
+<!-- has_section diamond -->
+<polygon points="660,88 700,70 740,88 700,106" fill="white" stroke="#000" stroke-width="1.3"/>
+<text x="700" y="92" text-anchor="middle" font-size="9" font-weight="bold">has</text>
+
+<!-- contains_table diamond -->
+<polygon points="842,200 882,183 922,200 882,217" fill="white" stroke="#000" stroke-width="1.3"/>
+<text x="882" y="204" text-anchor="middle" font-size="9" font-weight="bold">contains</text>
+
+<!-- has_category label -->
+<text x="175" y="145" text-anchor="middle" font-size="9" font-style="italic">has</text>
+
+<!-- places diamond -->
+<polygon points="465,225 505,207 545,225 505,243" fill="white" stroke="#000" stroke-width="1.3"/>
+<text x="505" y="229" text-anchor="middle" font-size="9" font-weight="bold">places</text>
+
+<!-- assigned diamond -->
+<polygon points="665,315 705,297 745,315 705,333" fill="white" stroke="#000" stroke-width="1.3"/>
+<text x="705" y="319" text-anchor="middle" font-size="9" font-weight="bold">assigned</text>
+
+<!-- has_item diamond -->
+<polygon points="135,420 175,402 215,420 175,438" fill="white" stroke="#000" stroke-width="1.3"/>
+<text x="175" y="424" text-anchor="middle" font-size="9" font-weight="bold">has</text>
+
+<!-- contains_orderitem diamond -->
+<polygon points="465,513 505,495 545,513 505,531" fill="white" stroke="#000" stroke-width="1.3"/>
+<text x="505" y="517" text-anchor="middle" font-size="9" font-weight="bold">contains</text>
+
+<!-- listed_in diamond -->
+<polygon points="310,542 345,524 380,542 345,560" fill="white" stroke="#000" stroke-width="1.3"/>
+<text x="345" y="546" text-anchor="middle" font-size="9" font-weight="bold">listed in</text>
+
+<!-- generates_bill diamond -->
+<polygon points="655,440 695,422 735,440 695,458" fill="white" stroke="#000" stroke-width="1.3"/>
+<text x="695" y="444" text-anchor="middle" font-size="9" font-weight="bold">generates</text>
+
+<!-- ═══════════════════════════════════════
+     ENTITY RECTANGLES
+═══════════════════════════════════════ -->
+
+<!-- Hotel -->
+<rect x="430" y="65" width="150" height="47" fill="white" stroke="#000" stroke-width="2"/>
+<text x="505" y="93" text-anchor="middle" font-weight="bold" font-size="13">Hotel</text>
+
+<!-- Admin -->
+<rect x="60" y="65" width="115" height="47" fill="white" stroke="#000" stroke-width="2"/>
+<text x="118" y="93" text-anchor="middle" font-weight="bold" font-size="13">Admin</text>
+
+<!-- Section -->
+<rect x="820" y="65" width="125" height="47" fill="white" stroke="#000" stroke-width="2"/>
+<text x="882" y="93" text-anchor="middle" font-weight="bold" font-size="13">Section</text>
+
+<!-- RestaurantTable -->
+<rect x="820" y="275" width="125" height="47" fill="white" stroke="#000" stroke-width="2"/>
+<text x="882" y="297" text-anchor="middle" font-weight="bold" font-size="11">Restaurant</text>
+<text x="882" y="312" text-anchor="middle" font-weight="bold" font-size="11">Table</text>
+
+<!-- MenuCategory -->
+<rect x="100" y="265" width="150" height="47" fill="white" stroke="#000" stroke-width="2"/>
+<text x="175" y="293" text-anchor="middle" font-weight="bold" font-size="11">MenuCategory</text>
+
+<!-- Order -->
+<rect x="430" y="375" width="150" height="47" fill="white" stroke="#000" stroke-width="2"/>
+<text x="505" y="403" text-anchor="middle" font-weight="bold" font-size="13">Order</text>
+
+<!-- MenuItem -->
+<rect x="100" y="510" width="150" height="47" fill="white" stroke="#000" stroke-width="2"/>
+<text x="175" y="538" text-anchor="middle" font-weight="bold" font-size="12">MenuItem</text>
+
+<!-- OrderItem -->
+<rect x="430" y="580" width="150" height="47" fill="white" stroke="#000" stroke-width="2"/>
+<text x="505" y="608" text-anchor="middle" font-weight="bold" font-size="12">OrderItem</text>
+
+<!-- Bill -->
+<rect x="820" y="510" width="125" height="47" fill="white" stroke="#000" stroke-width="2"/>
+<text x="882" y="538" text-anchor="middle" font-weight="bold" font-size="13">Bill</text>
+
+<!-- Staff -->
+<rect x="940" y="275" width="115" height="47" fill="white" stroke="#000" stroke-width="2"/>
+<text x="998" y="303" text-anchor="middle" font-weight="bold" font-size="13">Staff</text>
+
+<!-- ═══════════════════════════════════════
+     ATTRIBUTES — Hotel
+═══════════════════════════════════════ -->
+<line x1="470" y1="65" x2="450" y2="22" stroke="#000" stroke-width="1"/>
+<ellipse cx="440" cy="14" rx="28" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="440" y="18" text-anchor="middle" font-size="8">hotel_id</text>
+
+<line x1="505" y1="65" x2="505" y2="22" stroke="#000" stroke-width="1"/>
+<ellipse cx="505" cy="14" rx="22" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="505" y="18" text-anchor="middle" font-size="8">name</text>
+
+<line x1="545" y1="65" x2="560" y2="22" stroke="#000" stroke-width="1"/>
+<ellipse cx="572" cy="14" rx="22" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="572" y="18" text-anchor="middle" font-size="8">email</text>
+
+<line x1="580" y1="88" x2="618" y2="88" stroke="#000" stroke-width="1"/>
+<ellipse cx="635" cy="88" rx="20" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="635" y="92" text-anchor="middle" font-size="8">plan</text>
+
+<line x1="505" y1="112" x2="505" y2="140" stroke="#000" stroke-width="1"/>
+<ellipse cx="505" cy="150" rx="24" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="505" y="154" text-anchor="middle" font-size="8">status</text>
+
+<line x1="430" y1="80" x2="398" y2="80" stroke="#000" stroke-width="1"/>
+<ellipse cx="380" cy="80" rx="20" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="380" y="84" text-anchor="middle" font-size="8">slug</text>
+
+<!-- ═══════════════════════════════════════
+     ATTRIBUTES — Admin
+═══════════════════════════════════════ -->
+<line x1="90" y1="65" x2="68" y2="30" stroke="#000" stroke-width="1"/>
+<ellipse cx="58" cy="22" rx="22" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="58" y="26" text-anchor="middle" font-size="8">admin_id</text>
+
+<line x1="118" y1="65" x2="102" y2="30" stroke="#000" stroke-width="1"/>
+<ellipse cx="96" cy="22" rx="18" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="96" y="26" text-anchor="middle" font-size="8">name</text>
+
+<line x1="145" y1="65" x2="155" y2="30" stroke="#000" stroke-width="1"/>
+<ellipse cx="162" cy="22" rx="20" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="162" y="26" text-anchor="middle" font-size="8">email</text>
+
+<line x1="60" y1="95" x2="28" y2="95" stroke="#000" stroke-width="1"/>
+<ellipse cx="14" cy="95" rx="16" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="14" y="99" text-anchor="middle" font-size="8">role</text>
+
+<line x1="60" y1="110" x2="30" y2="128" stroke="#000" stroke-width="1"/>
+<ellipse cx="20" cy="136" rx="22" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="20" y="140" text-anchor="middle" font-size="8">password</text>
+
+<line x1="140" y1="112" x2="128" y2="145" stroke="#000" stroke-width="1"/>
+<ellipse cx="122" cy="155" rx="24" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="122" y="159" text-anchor="middle" font-size="8">is_active</text>
+
+<!-- ═══════════════════════════════════════
+     ATTRIBUTES — Section
+═══════════════════════════════════════ -->
+<line x1="850" y1="65" x2="830" y2="28" stroke="#000" stroke-width="1"/>
+<ellipse cx="822" cy="18" rx="28" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="822" y="22" text-anchor="middle" font-size="8">section_id</text>
+
+<line x1="882" y1="65" x2="882" y2="28" stroke="#000" stroke-width="1"/>
+<ellipse cx="882" cy="18" rx="20" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="882" y="22" text-anchor="middle" font-size="8">name</text>
+
+<line x1="935" y1="65" x2="952" y2="28" stroke="#000" stroke-width="1"/>
+<ellipse cx="960" cy="18" rx="28" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="960" y="22" text-anchor="middle" font-size="8">hotel_id (FK)</text>
+
+<!-- ═══════════════════════════════════════
+     ATTRIBUTES — RestaurantTable
+═══════════════════════════════════════ -->
+<line x1="840" y1="275" x2="820" y2="240" stroke="#000" stroke-width="1"/>
+<ellipse cx="810" cy="232" rx="25" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="810" y="236" text-anchor="middle" font-size="8">table_id</text>
+
+<line x1="880" y1="275" x2="870" y2="235" stroke="#000" stroke-width="1"/>
+<ellipse cx="862" cy="225" rx="30" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="862" y="229" text-anchor="middle" font-size="8">table_name</text>
+
+<line x1="930" y1="275" x2="950" y2="235" stroke="#000" stroke-width="1"/>
+<ellipse cx="960" cy="225" rx="20" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="960" y="229" text-anchor="middle" font-size="8">status</text>
+
+<line x1="862" y1="322" x2="852" y2="348" stroke="#000" stroke-width="1"/>
+<ellipse cx="842" cy="358" rx="24" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="842" y="362" text-anchor="middle" font-size="8">qr_code</text>
+
+<line x1="910" y1="322" x2="930" y2="350" stroke="#000" stroke-width="1"/>
+<ellipse cx="942" cy="358" rx="22" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="942" y="362" text-anchor="middle" font-size="8">is_active</text>
+
+<!-- ═══════════════════════════════════════
+     ATTRIBUTES — Staff
+═══════════════════════════════════════ -->
+<line x1="960" y1="275" x2="940" y2="240" stroke="#000" stroke-width="1"/>
+<ellipse cx="930" cy="232" rx="22" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="930" y="236" text-anchor="middle" font-size="8">staff_id</text>
+
+<line x1="998" y1="275" x2="998" y2="235" stroke="#000" stroke-width="1"/>
+<ellipse cx="998" cy="225" rx="20" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="998" y="229" text-anchor="middle" font-size="8">name</text>
+
+<line x1="1035" y1="275" x2="1060" y2="240" stroke="#000" stroke-width="1"/>
+<ellipse cx="1070" cy="232" rx="18" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="1070" y="236" text-anchor="middle" font-size="8">role</text>
+
+<line x1="960" y1="322" x2="940" y2="350" stroke="#000" stroke-width="1"/>
+<ellipse cx="928" cy="358" rx="20" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="928" y="362" text-anchor="middle" font-size="8">salary</text>
+
+<line x1="1020" y1="322" x2="1045" y2="350" stroke="#000" stroke-width="1"/>
+<ellipse cx="1057" cy="358" rx="22" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="1057" y="362" text-anchor="middle" font-size="8">phone</text>
+
+<!-- ═══════════════════════════════════════
+     ATTRIBUTES — MenuCategory
+═══════════════════════════════════════ -->
+<line x1="130" y1="265" x2="110" y2="230" stroke="#000" stroke-width="1"/>
+<ellipse cx="100" cy="220" rx="30" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="100" y="224" text-anchor="middle" font-size="8">category_id</text>
+
+<line x1="175" y1="265" x2="175" y2="230" stroke="#000" stroke-width="1"/>
+<ellipse cx="175" cy="220" rx="20" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="175" y="224" text-anchor="middle" font-size="8">name</text>
+
+<line x1="220" y1="265" x2="240" y2="230" stroke="#000" stroke-width="1"/>
+<ellipse cx="250" cy="220" rx="30" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="250" y="224" text-anchor="middle" font-size="8">display_order</text>
+
+<!-- ═══════════════════════════════════════
+     ATTRIBUTES — Order
+═══════════════════════════════════════ -->
+<line x1="450" y1="375" x2="425" y2="340" stroke="#000" stroke-width="1"/>
+<ellipse cx="415" cy="330" rx="28" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="415" y="334" text-anchor="middle" font-size="8">order_id</text>
+
+<line x1="505" y1="375" x2="505" y2="345" stroke="#000" stroke-width="1"/>
+<ellipse cx="505" cy="335" rx="22" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="505" y="339" text-anchor="middle" font-size="8">status</text>
+
+<line x1="558" y1="375" x2="578" y2="345" stroke="#000" stroke-width="1"/>
+<ellipse cx="590" cy="335" rx="30" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="590" y="339" text-anchor="middle" font-size="8">total_amount</text>
+
+<line x1="430" y1="395" x2="395" y2="405" stroke="#000" stroke-width="1"/>
+<ellipse cx="373" cy="405" rx="30" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="373" y="409" text-anchor="middle" font-size="8">kot_number</text>
+
+<line x1="430" y1="410" x2="395" y2="430" stroke="#000" stroke-width="1"/>
+<ellipse cx="373" cy="440" rx="30" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="373" y="444" text-anchor="middle" font-size="8">captain_name</text>
+
+<line x1="580" y1="395" x2="615" y2="405" stroke="#000" stroke-width="1"/>
+<ellipse cx="637" cy="405" rx="30" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="637" y="409" text-anchor="middle" font-size="8">payment_mode</text>
+
+<!-- ═══════════════════════════════════════
+     ATTRIBUTES — MenuItem
+═══════════════════════════════════════ -->
+<line x1="115" y1="510" x2="80" y2="478" stroke="#000" stroke-width="1"/>
+<ellipse cx="68" cy="468" rx="28" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="68" y="472" text-anchor="middle" font-size="8">item_id</text>
+
+<line x1="150" y1="510" x2="135" y2="478" stroke="#000" stroke-width="1"/>
+<ellipse cx="128" cy="468" rx="20" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="128" y="472" text-anchor="middle" font-size="8">name</text>
+
+<line x1="195" y1="510" x2="215" y2="478" stroke="#000" stroke-width="1"/>
+<ellipse cx="224" cy="468" rx="20" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="224" y="472" text-anchor="middle" font-size="8">price</text>
+
+<line x1="110" y1="557" x2="78" y2="575" stroke="#000" stroke-width="1"/>
+<ellipse cx="62" cy="582" rx="20" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="62" y="586" text-anchor="middle" font-size="8">is_veg</text>
+
+<line x1="175" y1="557" x2="175" y2="580" stroke="#000" stroke-width="1"/>
+<ellipse cx="175" cy="590" rx="28" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="175" y="594" text-anchor="middle" font-size="8">is_available</text>
+
+<line x1="235" y1="542" x2="258" y2="560" stroke="#000" stroke-width="1"/>
+<ellipse cx="268" cy="570" rx="28" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="268" y="574" text-anchor="middle" font-size="8">half_price</text>
+
+<!-- ═══════════════════════════════════════
+     ATTRIBUTES — OrderItem
+═══════════════════════════════════════ -->
+<line x1="455" y1="580" x2="430" y2="555" stroke="#000" stroke-width="1"/>
+<ellipse cx="420" cy="547" rx="30" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="420" y="551" text-anchor="middle" font-size="8">orderitem_id</text>
+
+<line x1="505" y1="627" x2="490" y2="658" stroke="#000" stroke-width="1"/>
+<ellipse cx="482" cy="668" rx="24" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="482" y="672" text-anchor="middle" font-size="8">quantity</text>
+
+<line x1="535" y1="627" x2="548" y2="658" stroke="#000" stroke-width="1"/>
+<ellipse cx="558" cy="668" rx="28" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="558" y="672" text-anchor="middle" font-size="8">unit_price</text>
+
+<line x1="560" y1="600" x2="590" y2="582" stroke="#000" stroke-width="1"/>
+<ellipse cx="604" cy="575" rx="28" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="604" y="579" text-anchor="middle" font-size="8">item_name</text>
+
+<!-- ═══════════════════════════════════════
+     ATTRIBUTES — Bill
+═══════════════════════════════════════ -->
+<line x1="845" y1="510" x2="820" y2="478" stroke="#000" stroke-width="1"/>
+<ellipse cx="808" cy="468" rx="28" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="808" y="472" text-anchor="middle" font-size="8">bill_id</text>
+
+<line x1="882" y1="510" x2="882" y2="475" stroke="#000" stroke-width="1"/>
+<ellipse cx="882" cy="465" rx="30" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="882" y="469" text-anchor="middle" font-size="8">bill_number</text>
+
+<line x1="930" y1="510" x2="952" y2="478" stroke="#000" stroke-width="1"/>
+<ellipse cx="964" cy="468" rx="30" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="964" y="472" text-anchor="middle" font-size="8">total_amount</text>
+
+<line x1="845" y1="557" x2="820" y2="580" stroke="#000" stroke-width="1"/>
+<ellipse cx="808" cy="590" rx="30" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="808" y="594" text-anchor="middle" font-size="8">payment_mode</text>
+
+<line x1="882" y1="557" x2="882" y2="580" stroke="#000" stroke-width="1"/>
+<ellipse cx="882" cy="590" rx="28" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="882" y="594" text-anchor="middle" font-size="8">tax_amount</text>
+
+<line x1="930" y1="557" x2="952" y2="580" stroke="#000" stroke-width="1"/>
+<ellipse cx="964" cy="590" rx="30" ry="12" fill="white" stroke="#000" stroke-width="1"/>
+<text x="964" y="594" text-anchor="middle" font-size="8">discount_amt</text>
+
+<!-- ═══════════════════════════════════════
+     CAPTION
+═══════════════════════════════════════ -->
+<text x="575" y="790" text-anchor="middle" font-size="9" font-style="italic" fill="#444">
+  Fig. 3.2 — Entity Relationship Diagram (ERD) — Mejwani Restaurant Management System
+</text>
+
+</svg>
+</div>
+</body>
+</html>

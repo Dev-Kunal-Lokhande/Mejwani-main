@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+﻿import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
@@ -27,6 +27,42 @@ import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from '../../../utils/dateF
 import socket from '../../../shared/services/socketClient';
 import { getCachedMenu, setCachedMenu, getCachedCategories, setCachedCategories } from '../../../shared/services/menuCache';
 
+// Helper: fetch with captain JWT Authorization header attached automatically
+const captainFetch = (url, options = {}) => {
+  const token = localStorage.getItem('mejwani_captain_jwt') || localStorage.getItem('mejwani_admin_jwt');
+  return fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    }
+  });
+};
+
+// Decode JWT payload (base64) to get hotelId claim â€” no library needed
+const decodeJwtHotelId = () => {
+  try {
+    const token = localStorage.getItem('mejwani_captain_jwt') || localStorage.getItem('mejwani_admin_jwt');
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.hotelId ? String(payload.hotelId) : null;
+  } catch { return null; }
+};
+
+// Get effective hotel ID: prefer localStorage, fallback to JWT claim
+const getEffectiveHotelId = () => {
+  const stored = localStorage.getItem('mejwani_hotel_id');
+  if (stored && stored !== '0' && stored !== 'null') return stored;
+  const fromJwt = decodeJwtHotelId();
+  if (fromJwt) {
+    // Persist for future calls
+    localStorage.setItem('mejwani_hotel_id', fromJwt);
+    return fromJwt;
+  }
+  return '0';
+};
+
 
 // Component Imports
 import SectionSelector from '../components/SectionSelector';
@@ -45,7 +81,7 @@ const showPrinterErrorToast = (message, toastId) => {
           window.location.href = '/admin/settings?tab=printer';
         }}
       >
-        <span className="font-bold text-sm">❌ {message}</span>
+        <span className="font-bold text-sm">âŒ {message}</span>
         <span className="text-[10px] underline opacity-90 font-medium">Click here to configure printer settings.</span>
       </div>
     ),
@@ -113,17 +149,10 @@ export default function CaptainPanel() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // Resolve hotel context — prefer localStorage (set at login or at RoleSelection slug load).
+  // Resolve hotel context â€” prefer localStorage (set at login or at RoleSelection slug load).
   // Also support ?slug=hotel-ghata as fallback for direct navigation.
   const resolveHotelId = () => {
-    const stored = localStorage.getItem('mejwani_hotel_id');
-    if (stored && stored !== '0') return stored;
-    // Try URL slug param (set by RoleSelection navigation: /captain?slug=hotel-ghata)
-    const urlSlug = new URLSearchParams(window.location.search).get('slug') ||
-                    localStorage.getItem('mejwani_hotel_slug') || '';
-    // If slug is available but hotelId isn't, return '0' — fetchFloorplan will
-    // handle the slug→id resolution below.
-    return stored || '0';
+    return getEffectiveHotelId();
   };
 
   // Re-read hotelId on every render so it picks up late-set values from RoleSelection.
@@ -140,7 +169,7 @@ export default function CaptainPanel() {
   const [menuItems, setMenuItems] = useState([]);
   const [categories, setCategories] = useState([]);
 
-  // Active Captain Requests — fetched separately, displayed ONLY in Captain Panel
+  // Active Captain Requests â€” fetched separately, displayed ONLY in Captain Panel
   const [captainRequests, setCaptainRequests] = useState([]);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
@@ -255,10 +284,10 @@ export default function CaptainPanel() {
     if (showLoadingSpinner) setLoading(true);
     const startTime = performance.now();
     try {
-      const currentHotelId = localStorage.getItem('mejwani_hotel_id') || '0';
+      const currentHotelId = getEffectiveHotelId();
       const [secRes, tabRes] = await Promise.all([
-        fetch(`${API_BASE}/sections?hotelId=${currentHotelId}&t=${Date.now()}`),
-        fetch(`${API_BASE}/tables?hotelId=${currentHotelId}&t=${Date.now()}`)
+        captainFetch(`${API_BASE}/sections?hotelId=${currentHotelId}&t=${Date.now()}`),
+        captainFetch(`${API_BASE}/tables?hotelId=${currentHotelId}&t=${Date.now()}`)
       ]);
       const secData = await secRes.json();
       const tabData = await tabRes.json();
@@ -288,8 +317,8 @@ export default function CaptainPanel() {
     if (showLoadingSpinner) setLoading(true);
     const startTime = performance.now();
     try {
-      const currentHotelId = localStorage.getItem('mejwani_hotel_id') || '0';
-      const ordRes = await fetch(`${API_BASE}/orders?hotelId=${currentHotelId}&t=${Date.now()}`);
+      const currentHotelId = getEffectiveHotelId();
+      const ordRes = await captainFetch(`${API_BASE}/orders?hotelId=${currentHotelId}&t=${Date.now()}`);
       const ordData = await ordRes.json();
       if (ordData.success) {
         setOrders(ordData.data || []);
@@ -312,10 +341,10 @@ export default function CaptainPanel() {
     if (showLoadingSpinner) setLoading(true);
     const startTime = performance.now();
     try {
-      const currentHotelId = localStorage.getItem('mejwani_hotel_id') || '0';
+      const currentHotelId = getEffectiveHotelId();
       const menuPromise = getCachedMenu()
         ? Promise.resolve({ json: () => Promise.resolve({ success: true, data: getCachedMenu() }) })
-        : fetch(`${API_BASE}/menu?hotelId=${currentHotelId}`).then(async r => {
+        : captainFetch(`${API_BASE}/menu?hotelId=${currentHotelId}`).then(async r => {
             const clone = r.clone();
             const json = await clone.json();
             if (json.success) setCachedMenu(json.data);
@@ -324,7 +353,7 @@ export default function CaptainPanel() {
 
       const catPromise = getCachedCategories()
         ? Promise.resolve({ json: () => Promise.resolve({ success: true, data: getCachedCategories() }) })
-        : fetch(`${API_BASE}/menu-categories?hotelId=${currentHotelId}`).then(async r => {
+        : captainFetch(`${API_BASE}/menu-categories?hotelId=${currentHotelId}`).then(async r => {
             const clone = r.clone();
             const json = await clone.json();
             if (json.success) setCachedCategories(json.data);
@@ -358,8 +387,8 @@ export default function CaptainPanel() {
     if (showLoadingSpinner) setLoading(true);
     const startTime = performance.now();
     try {
-      const currentHotelId = localStorage.getItem('mejwani_hotel_id') || '0';
-      const settingsRes = await fetch(`${API_BASE}/admin/system-settings/public?hotelId=${currentHotelId}`);
+      const currentHotelId = getEffectiveHotelId();
+      const settingsRes = await captainFetch(`${API_BASE}/admin/system-settings/public?hotelId=${currentHotelId}`);
       const settingsData = await settingsRes.json();
       if (settingsRes.ok && settingsData.success && settingsData.data) {
         setCaptainName(cacheSystemSettings(settingsData.data).captain.name);
@@ -382,8 +411,8 @@ export default function CaptainPanel() {
     if (showLoadingSpinner) setLoading(true);
     const startTime = performance.now();
     try {
-      const currentHotelId = localStorage.getItem('mejwani_hotel_id') || '0';
-      const captainReqRes = await fetch(`${API_BASE}/customer/active-captain-requests?hotelId=${currentHotelId}`);
+      const currentHotelId = getEffectiveHotelId();
+      const captainReqRes = await captainFetch(`${API_BASE}/customer/active-captain-requests?hotelId=${currentHotelId}`);
       const captainReqData = await captainReqRes.json();
       if (captainReqData.success) {
         setCaptainRequests(captainReqData.data || []);
@@ -478,7 +507,7 @@ export default function CaptainPanel() {
     const fetchPrinterConfig = async () => {
       try {
         const token = localStorage.getItem('mejwani_captain_jwt') || localStorage.getItem('mejwani_admin_jwt');
-        const resp = await fetch(`${API_BASE}/print-agent/status`, {
+        const resp = await captainFetch(`${API_BASE}/print-agent/status`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await resp.json();
@@ -588,7 +617,7 @@ export default function CaptainPanel() {
       console.log('[DEBUG ORDER] KOT Socket ACK received');
       console.log('[DEBUG ORDER] KOT Play notification sound');
       console.log('[DEBUG ORDER] KOT toast.success() called');
-      toast.success(`✅ KOT printed successfully for ${data.tableName}.`, {
+      toast.success(`âœ… KOT printed successfully for ${data.tableName}.`, {
         id: `kot-success-${data.jobId}`,
         style: { borderRadius: '10px', background: '#333', color: '#fff' }
       });
@@ -642,7 +671,7 @@ export default function CaptainPanel() {
       // 2. Call the backend API to reject/clear the request
       const currentHotelId = hotelId || localStorage.getItem('mejwani_hotel_id') || '';
       const hotelParam = currentHotelId ? `?hotelId=${currentHotelId}` : '';
-      const res = await fetch(`${API_BASE}/customer/reject-captain-request${hotelParam}`, {
+      const res = await captainFetch(`${API_BASE}/customer/reject-captain-request${hotelParam}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -742,7 +771,7 @@ export default function CaptainPanel() {
       
       if (isDbOccupied && activeOrder && activeOrder.dbId) {
         try {
-          const response = await fetch(`${API_BASE}/bills/${activeOrder.dbId}/cancel?hotelId=${hotelId}`, {
+          const response = await captainFetch(`${API_BASE}/bills/${activeOrder.dbId}/cancel?hotelId=${hotelId}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -763,7 +792,7 @@ export default function CaptainPanel() {
         }
       } else if (isDbOccupied) {
         try {
-          await fetch(`${API_BASE}/tables/${activeTable.id}?hotelId=${hotelId}`, {
+          await captainFetch(`${API_BASE}/tables/${activeTable.id}?hotelId=${hotelId}`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json'
@@ -796,7 +825,7 @@ export default function CaptainPanel() {
     // Find dynamic running order for this table from the live orders state
     const runningOrder = orders.find(o => o.table_id === table.id && o.status !== 'COMPLETED' && o.status !== 'CANCELLED');
     if (runningOrder && runningOrder.items) {
-      // Silently load the running order into cart — no toast needed
+      // Silently load the running order into cart â€” no toast needed
       setCart(runningOrder.items.map(item => {
         const pType = item.portion_type || 'FULL';
         const isHalf = pType === 'HALF';
@@ -830,7 +859,7 @@ export default function CaptainPanel() {
       total: cart.reduce((sum, i) => sum + (i.price * i.qty), 0)
     };
     setDrafts((prev) => [newDraft, ...prev]);
-    // Draft saved silently — no toast to avoid noise during order taking
+    // Draft saved silently â€” no toast to avoid noise during order taking
   };
 
   const printKOT = async (orderNum, orderCart, tableObj, sectionName, captainName) => {
@@ -875,7 +904,7 @@ export default function CaptainPanel() {
       window.mejwani_toasted_jobs = window.mejwani_toasted_jobs || new Set();
       if (!window.mejwani_toasted_jobs.has(jobIdStr)) {
         window.mejwani_toasted_jobs.add(jobIdStr);
-        toast.success(`✅ KOT printed successfully for ${tableName || 'Table'}.`, {
+        toast.success(`âœ… KOT printed successfully for ${tableName || 'Table'}.`, {
           id: `kot-success-${jobId}`,
           style: { borderRadius: '10px', background: '#333', color: '#fff' }
         });
@@ -1006,7 +1035,7 @@ export default function CaptainPanel() {
     try {
       console.log('[KOT] Auto printing started');
       // 1. Queue job on cloud first to get the unique Job ID (approx 50ms)
-      const response = await fetch(`${API_BASE}/orders/print-kot?hotelId=${currentHotelId}`, {
+      const response = await captainFetch(`${API_BASE}/orders/print-kot?hotelId=${currentHotelId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(kotData)
@@ -1043,14 +1072,14 @@ export default function CaptainPanel() {
     if (cart.length === 0 || !activeTable) return;
     if (isSubmittingOrder) return;
 
-    if (!isSilent) {
-      // Validate KOT printer configuration immediately client-side
-      if (printerConfig && !printerConfig.kot) {
-        showPrinterErrorToast('KOT Printer is not configured.', 'kot-print-error');
-        return;
-      }
+
+    if (!isSilent && printerConfig && !printerConfig.kot) {
+      // Warn about printer but DON'T block — order still goes to kitchen
+      showPrinterErrorToast('KOT Printer is not configured.', 'kot-print-error');
     }
-    
+
+
+
     setIsSubmittingOrder(true);
     const now = new Date();
     setActiveTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -1074,7 +1103,7 @@ export default function CaptainPanel() {
     };
 
     try {
-      const response = await fetch(`${API_BASE}/orders?hotelId=${hotelId}`, {
+      const response = await captainFetch(`${API_BASE}/orders?hotelId=${hotelId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...orderPayload, hotelId: parseInt(hotelId) })
@@ -1082,10 +1111,10 @@ export default function CaptainPanel() {
       const data = await response.json();
       if (response.ok && data.success) {
         addToast(isSilent ? 'Order Saved Successfully' : 'Order Sent to Kitchen', 'success');
-        const cleanOrderNumber = parseInt(data.data.kot_number.replace(/\D/g, ''));
-        setOrderNumber(cleanOrderNumber);
-        
-        // Immediately continue to normal Captain workflow (instant transition)
+        const orderData = data.data || data.order || {};
+        const kotNum = orderData.kot_number || orderData.id || '';
+        const cleanOrderNumber = kotNum ? parseInt(String(kotNum).replace(/\D/g, '') || '0') : 0;
+        if (cleanOrderNumber) setOrderNumber(cleanOrderNumber);
         setCart([]);
         setActiveTable(null);
 
@@ -1137,7 +1166,7 @@ export default function CaptainPanel() {
 
     try {
       // 1. Create order as direct-bill (places it in BILL_PENDING status without printing KOT)
-      const response = await fetch(`${API_BASE}/orders/direct-bill?hotelId=${hotelId}`, {
+      const response = await captainFetch(`${API_BASE}/orders/direct-bill?hotelId=${hotelId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...orderPayload, hotelId: parseInt(hotelId) })
@@ -1148,7 +1177,7 @@ export default function CaptainPanel() {
         const orderId = data.data.id;
         
         // 2. Automatically complete payment and release the table/parcel slot
-        const payResponse = await fetch(`${API_BASE}/orders/pay/${orderId}?hotelId=${hotelId}`, {
+        const payResponse = await captainFetch(`${API_BASE}/orders/pay/${orderId}?hotelId=${hotelId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ hotelId: parseInt(hotelId) })
@@ -1178,7 +1207,7 @@ export default function CaptainPanel() {
   const handleRequestBill = async () => {
     if (!activeTable) return;
     try {
-      const response = await fetch(`${API_BASE}/orders/request-bill/${activeTable.id}?hotelId=${hotelId}`, {
+      const response = await captainFetch(`${API_BASE}/orders/request-bill/${activeTable.id}?hotelId=${hotelId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hotelId: parseInt(hotelId) })
@@ -1201,7 +1230,7 @@ export default function CaptainPanel() {
   const handleShiftTableConfirm = async (targetTable) => {
     if (!activeTable || !targetTable) return;
     try {
-      const response = await fetch(`${API_BASE}/orders/transfer?hotelId=${hotelId}`, {
+      const response = await captainFetch(`${API_BASE}/orders/transfer?hotelId=${hotelId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1567,7 +1596,7 @@ export default function CaptainPanel() {
                         <ShoppingBag className="w-4.5 h-4.5 text-white" />
                       </div>
                       <span>
-                        {cart.reduce((sum, item) => sum + item.qty, 0)} Items | ₹
+                        {cart.reduce((sum, item) => sum + item.qty, 0)} Items | â‚¹
                         {cart.reduce((sum, item) => sum + (item.price * item.qty), 0).toFixed(0)}
                       </span>
                     </div>
@@ -1662,7 +1691,7 @@ export default function CaptainPanel() {
 
       {/* Simulated Footer */}
       <footer className="mt-auto py-2.5 sm:py-5 bg-white dark:bg-[#0c0c0c] border-t border-slate-200 dark:border-white/5 text-center text-[9px] sm:text-xs font-bold text-slate-400 dark:text-white/20 transition-colors">
-        <p className="hidden xs:block">© 2026 Mejwani Hotel Systems · Captain Handheld POS v2.4.1</p>
+        <p className="hidden xs:block">Â© 2026 Mejwani Hotel Systems Â· Captain Handheld POS v2.4.1</p>
         <p className="xs:hidden">Mejwani Handheld POS v2.4.1</p>
       </footer>
     </div>

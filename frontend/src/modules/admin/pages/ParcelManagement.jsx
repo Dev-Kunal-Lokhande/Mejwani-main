@@ -1,11 +1,9 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
   Save,
   Printer,
   X,
-  Clock,
-  ShoppingBag,
   Plus,
   Minus,
   Search,
@@ -14,41 +12,16 @@ import {
   Trash2,
   Edit2,
   Layers,
-  CheckCircle2,
-  XCircle,
   Package
 } from 'lucide-react';
 import AdminLayout from '../../../shared/layouts/AdminLayout';
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from '../../../utils/dateFormatter';
 import socket from '../../../shared/services/socketClient';
-import { getAudioContext } from '../../../shared/services/audioHelper';
 import { API_BASE, authorizedFetch } from '../../../shared/services/apiBase';
 import { formatCurrencyWithSettings, getCachedSystemSettings } from '../../../shared/services/systemSettings';
 import { getCachedMenu, setCachedMenu } from '../../../shared/services/menuCache';
 import axios from 'axios';
 import DiningTimer from '../../../shared/components/DiningTimer';
-
-const showPrinterErrorToast = (message, toastId) => {
-  toast.error(
-    (t) => (
-      <div 
-        className="flex flex-col gap-1 cursor-pointer"
-        onClick={() => {
-          toast.dismiss(t.id);
-          window.location.href = '/admin/settings?tab=printer';
-        }}
-      >
-        <span className="font-bold text-sm">❌ {message}</span>
-        <span className="text-[10px] underline opacity-90 font-medium">Click here to configure printer settings.</span>
-      </div>
-    ),
-    { 
-      id: toastId,
-      duration: 8000,
-      style: { borderRadius: '10px', background: '#e11d48', color: '#fff' }
-    }
-  );
-};
 
 export default function ParcelManagement() {
   const [tables, setTables] = useState([]);
@@ -65,11 +38,10 @@ export default function ParcelManagement() {
   });
   const [loading, setLoading] = useState(true);
   const [selectedPaymentMode, setSelectedPaymentMode] = useState('CASH');
-  const [error, setError] = useState(null);
   const menuSearchInputRef = useRef(null);
   const [systemSettings, setSystemSettings] = useState(getCachedSystemSettings());
   const formatCurrency = (value = 0, decimals = 2) => formatCurrencyWithSettings(value, systemSettings, decimals);
-  
+
   const cgstRate = Number(systemSettings.billing.cgst) || 0;
   const sgstRate = Number(systemSettings.billing.sgst) || 0;
   const serviceChargeRate = Number(systemSettings.billing.serviceCharge) || 0;
@@ -94,7 +66,6 @@ export default function ParcelManagement() {
   });
 
   const onPrintJobAcknowledgedLocal = (jobId, tableName, jobType) => {
-    console.log(`[DEBUG] onPrintJobAcknowledgedLocal called in ParcelManagement for jobId: ${jobId}, tableName: ${tableName}, jobType: ${jobType}.`);
     const jobIdStr = String(jobId);
     window.mejwani_toasted_jobs = window.mejwani_toasted_jobs || new Set();
     if (!window.mejwani_toasted_jobs.has(jobIdStr)) {
@@ -167,7 +138,9 @@ export default function ParcelManagement() {
     if (!selectedTableLive) return null;
     return orders.find(o => o.table_id === selectedTableLive.id && o.status !== 'COMPLETED' && o.status !== 'CANCELLED') || null;
   }, [orders, selectedTableLive]);
+
   const [checkoutOrder, setCheckoutOrder] = useState(null);
+  const [eBillModalData, setEBillModalData] = useState(null);
   const [menuViewMode, setMenuViewMode] = useState('table');
 
   useEffect(() => {
@@ -243,7 +216,7 @@ export default function ParcelManagement() {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextClass) return;
       const ctx = new AudioContextClass();
-      
+
       const playNote = (freq, delay, duration) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -257,8 +230,8 @@ export default function ParcelManagement() {
         osc.stop(ctx.currentTime + delay + duration);
       };
 
-      playNote(523.25, 0, 0.4);   // C5 Harmonic Tone
-      playNote(659.25, 0.15, 0.6); // E5 Harmonic Tone
+      playNote(523.25, 0, 0.4);
+      playNote(659.25, 0.15, 0.6);
     } catch (e) {
       console.warn('Play chime failed:', e);
     }
@@ -307,7 +280,6 @@ export default function ParcelManagement() {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
       const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
       if (hotelId) {
-        console.log(`[SOCKET] ParcelManagement emitting join-hotel-room: ${hotelId}:admin`);
         socket.emit('join-hotel-room', `${hotelId}:admin`);
       }
     };
@@ -331,50 +303,28 @@ export default function ParcelManagement() {
     socket.on('new-order', onNewOrder);
 
     const handleKotPrintAcknowledged = (data) => {
-      console.log('[TRACE] Frontend received kot_print_acknowledged');
-      console.log('[DEBUG] Socket kot_print_acknowledged received in ParcelManagement:', data);
-      if (!data || !data.jobId) {
-        console.log('[DEBUG] handleKotPrintAcknowledged failed: missing data or jobId:', data);
-        return;
-      }
-      const jobIdStr = String(data.jobId);
-      if (typeof window.mejwani_clear_ack_timeout === 'function') {
-        window.mejwani_clear_ack_timeout(data.jobId);
-      }
-      window.mejwani_toasted_jobs = window.mejwani_toasted_jobs || new Set();
-      if (window.mejwani_toasted_jobs.has(jobIdStr)) {
-        console.log('[DEBUG] KOT print already toasted, skipping duplicate:', jobIdStr);
-        return;
-      }
-      console.log('[DEBUG ORDER] KOT Socket ACK received');
-      console.log('[DEBUG ORDER] KOT Play notification sound');
-      console.log('[DEBUG ORDER] KOT toast.success() called');
-      toast.success(`✅ KOT printed successfully for ${data.tableName}.`, {
-        id: `kot-success-${data.jobId}`,
-        style: { borderRadius: '10px', background: '#333', color: '#fff' }
-      });
-      console.log('[DEBUG ORDER] KOT window.mejwani_toasted_jobs.add(jobId) called');
-      window.mejwani_toasted_jobs.add(jobIdStr);
-      console.log('[DEBUG] Toast displayed: KOT for ' + data.tableName);
-      console.log('[KOT] Toast displayed');
-    };
-
-    const handleBillPrintAcknowledged = (data) => {
-      console.log('[TRACE] Frontend received bill_print_acknowledged');
-      console.log('[DEBUG] Socket bill_print_acknowledged received:', data);
       if (!data || !data.jobId) return;
       const jobIdStr = String(data.jobId);
       if (typeof window.mejwani_clear_ack_timeout === 'function') {
         window.mejwani_clear_ack_timeout(data.jobId);
       }
       window.mejwani_toasted_jobs = window.mejwani_toasted_jobs || new Set();
-      if (window.mejwani_toasted_jobs.has(jobIdStr)) {
-        console.log('[DEBUG] Bill print already toasted, skipping duplicate:', jobIdStr);
-        return;
+      if (window.mejwani_toasted_jobs.has(jobIdStr)) return;
+      toast.success(`✅ KOT printed successfully for ${data.tableName}.`, {
+        id: `kot-success-${data.jobId}`,
+        style: { borderRadius: '10px', background: '#333', color: '#fff' }
+      });
+      window.mejwani_toasted_jobs.add(jobIdStr);
+    };
+
+    const handleBillPrintAcknowledged = (data) => {
+      if (!data || !data.jobId) return;
+      const jobIdStr = String(data.jobId);
+      if (typeof window.mejwani_clear_ack_timeout === 'function') {
+        window.mejwani_clear_ack_timeout(data.jobId);
       }
-      console.log('[DEBUG ORDER] Bill Socket ACK received');
-      console.log('[DEBUG ORDER] Bill Play notification sound');
-      console.log('[DEBUG ORDER] Bill toast.success() called');
+      window.mejwani_toasted_jobs = window.mejwani_toasted_jobs || new Set();
+      if (window.mejwani_toasted_jobs.has(jobIdStr)) return;
       const tableName = data.tableName || 'Table';
       const message = tableName.startsWith('Parcel')
         ? `✅ Bill printed successfully for ${tableName}.`
@@ -383,9 +333,7 @@ export default function ParcelManagement() {
         id: `bill-success-${data.jobId}`,
         style: { borderRadius: '10px', background: '#333', color: '#fff' }
       });
-      console.log('[DEBUG ORDER] Bill window.mejwani_toasted_jobs.add(jobId) called');
       window.mejwani_toasted_jobs.add(jobIdStr);
-      console.log('[DEBUG] Toast displayed: Bill for Table ' + tableName);
     };
 
     socket.on('kot_print_acknowledged', handleKotPrintAcknowledged);
@@ -433,7 +381,6 @@ export default function ParcelManagement() {
     const list = [];
     menuItems.forEach((item) => {
       if (item.pricing_type === 'HALF_FULL') {
-        // Half
         list.push({
           ...item,
           _id: `${item._id || item.id}_HALF`,
@@ -447,7 +394,6 @@ export default function ParcelManagement() {
           pricing_type: 'SINGLE',
           portion_type: 'HALF'
         });
-        // Full
         list.push({
           ...item,
           _id: `${item._id || item.id}_FULL`,
@@ -562,12 +508,12 @@ export default function ParcelManagement() {
 
   const handleAddAdditionalItem = (menuItem, portion = null) => {
     const isHalfFull = menuItem.pricing_type === 'HALF_FULL';
-    const portionType = isHalfFull 
-      ? (portion === 'HALF' ? 'HALF' : 'FULL') 
+    const portionType = isHalfFull
+      ? (portion === 'HALF' ? 'HALF' : 'FULL')
       : (menuItem.portion_type || menuItem.portionType || 'FULL');
     const baseId = menuItem.originalId || menuItem._id || menuItem.id;
     const cartId = `${baseId}_${portionType}`;
-    
+
     let resolvedPrice = parseFloat(menuItem.price || 0);
     let displayName = menuItem.name;
     if (isHalfFull) {
@@ -591,7 +537,6 @@ export default function ParcelManagement() {
       }];
     });
 
-    // Keep search focused for fast POS style typing
     setTimeout(() => {
       menuSearchInputRef.current?.focus();
     }, 10);
@@ -630,17 +575,91 @@ export default function ParcelManagement() {
     additionalItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
     [additionalItems]);
 
-  const handleSendToKot = async ({ printKot = true } = {}) => {
-    console.log('[PARCEL] Generate KOT clicked (Create Order)');
-    if (printKot && printerConfig && !printerConfig.kot) {
-      showPrinterErrorToast('KOT Printer is not configured.', 'kot-print-error');
+  const openBrowserPrintKOT = (kotData) => {
+    const printWindow = window.open('', '_blank', 'width=380,height=550');
+    if (!printWindow) {
+      window.print();
       return;
     }
+
+    const itemsRows = (kotData.items || [])
+      .map(
+        (item) => `
+        <tr>
+          <td style="padding: 6px 0; text-align: left; font-weight: bold;">
+            ${item.name}
+            ${item.note ? `<div style="font-size: 10px; font-weight: normal; font-style: italic;">* ${item.note}</div>` : ''}
+          </td>
+          <td style="padding: 6px 0; text-align: right; font-weight: 900; font-size: 14px;">x${item.quantity}</td>
+        </tr>`
+      )
+      .join('');
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>KOT - ${kotData.orderId}</title>
+          <style>
+            @page { size: 80mm auto; margin: 0; }
+            body {
+              font-family: 'Courier New', monospace;
+              width: 300px;
+              margin: 0 auto;
+              padding: 15px;
+              color: #000;
+              font-size: 12px;
+            }
+            .center { text-align: center; }
+            .bold { font-weight: bold; }
+            .divider { border-top: 1px dashed #000; margin: 8px 0; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            th { border-bottom: 1px dashed #000; padding-bottom: 4px; }
+          </style>
+        </head>
+        <body>
+          <div class="center bold" style="font-size: 15px; letter-spacing: 1px;">${kotData.title || 'KITCHEN ORDER TICKET'}</div>
+          <div class="center" style="font-size: 11px; margin-top: 2px;">${kotData.hotelName || 'MEJWANI'}</div>
+          
+          <div class="divider"></div>
+          <div><strong>Counter / Table:</strong> ${kotData.tableName} (${kotData.sectionName})</div>
+          <div><strong>KOT / Order No:</strong> ${kotData.orderId}</div>
+          <div><strong>Captain:</strong> ${kotData.captainName}</div>
+          <div><strong>Time:</strong> ${kotData.dateTime}</div>
+          <div class="divider"></div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align: left;">Item</th>
+                <th style="text-align: right;">Qty</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsRows}
+            </tbody>
+          </table>
+
+          <div class="divider"></div>
+          <div class="center bold" style="font-size: 11px;">--- KITCHEN COPY ---</div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              window.onafterprint = function() { window.close(); };
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const handleSendToKot = async ({ printKot = true } = {}) => {
     if (additionalItems.length === 0) {
       toast.error('Add at least one item to send to KOT.', { style: { borderRadius: '10px', background: '#333', color: '#fff' } });
-      return;
+      return null;
     }
-    if (!selectedTable) return;
+    if (!selectedTable) return null;
 
     setIsSubmittingDirectOrder(true);
     try {
@@ -667,9 +686,14 @@ export default function ParcelManagement() {
       const res = await axios.post(`${API_BASE}/orders${hotelParam}`, payload);
       if (res.data.success) {
         const createdOrder = res.data.data;
-        console.log('[PARCEL] API success. ORDER_ID:', createdOrder.id);
+        toast.success(`✅ Parcel order placed for ${selectedTable.table_name}!`);
         if (printKot) {
-          printKOT(createdOrder).catch(err => console.error('[Background Print] Failed:', err));
+          printKOT({
+            ...createdOrder,
+            table_name: selectedTable.table_name || selectedTable.table_number,
+            section_name: 'PARCEL',
+            items: createdOrder.items || payload.items
+          }).catch(err => console.error('[Background Print] Failed:', err));
         }
 
         setIsCreatingDirectOrder(false);
@@ -677,42 +701,30 @@ export default function ParcelManagement() {
         setCheckoutOrder(createdOrder);
         fetchTables();
         fetchOrders();
+        return createdOrder;
       } else {
-        if (res.data.code === 'PRINTER_NOT_CONFIGURED') {
-          showPrinterErrorToast(res.data.message || 'KOT Printer is not configured.', 'kot-print-error');
-          return;
-        }
         throw new Error(res.data.message || 'Failed to send KOT');
       }
     } catch (err) {
       console.error('[Parcel] handleSendToKot failed:', err);
       const errMsg = err.response?.data?.message || err.message;
-      const errCode = err.response?.data?.code;
-      if (errCode === 'PRINTER_NOT_CONFIGURED') {
-        showPrinterErrorToast(errMsg, 'kot-print-error');
-      } else {
-        toast.error(`❌ ${errMsg}`, {
-          style: { borderRadius: '10px', background: '#e11d48', color: '#fff' }
-        });
-      }
+      toast.error(`❌ ${errMsg}`, {
+        style: { borderRadius: '10px', background: '#e11d48', color: '#fff' }
+      });
+      return null;
     } finally {
       setIsSubmittingDirectOrder(false);
     }
   };
 
   const handleSubmitAdditionalItems = async ({ printKot = true } = {}) => {
-    console.log('[PARCEL] Generate KOT clicked (Append Items)');
-    if (printKot && printerConfig && !printerConfig.kot) {
-      showPrinterErrorToast('KOT Printer is not configured.', 'kot-print-error');
-      return;
-    }
-    if (!activeOrderForSelectedTable || !selectedTableLive) return;
+    if (!activeOrderForSelectedTable || !selectedTableLive) return null;
 
     if (additionalItems.length === 0) {
       toast.error('Cart cannot be empty. Please keep at least one item or cancel the bill.', {
         style: { borderRadius: '10px', background: '#333', color: '#fff' }
       });
-      return;
+      return null;
     }
 
     const itemsToSubmit = [];
@@ -765,7 +777,7 @@ export default function ParcelManagement() {
 
     if (itemsToSubmit.length === 0) {
       toast.error('No changes made to the bill.', { style: { borderRadius: '10px', background: '#333', color: '#fff' } });
-      return;
+      return activeOrderForSelectedTable;
     }
 
     setIsSubmittingAdditional(true);
@@ -780,7 +792,6 @@ export default function ParcelManagement() {
       };
 
       const orderId = activeOrderForSelectedTable.id;
-      console.log('Parcel Send to KOT clicked (Append Items)');
       const res = await axios.put(
         `${API_BASE}/orders/${orderId}/append-items${hotelParam}`,
         payload
@@ -788,6 +799,7 @@ export default function ParcelManagement() {
 
       if (res.data.success) {
         const updatedOrderData = res.data.data;
+        toast.success('✅ Parcel order updated!');
         const deltaItems = itemsToSubmit
           .filter(item => item.quantity > 0)
           .map(item => ({
@@ -797,7 +809,7 @@ export default function ParcelManagement() {
             note: item.note
           }));
 
-        if (deltaItems.length > 0) {
+        if (deltaItems.length > 0 && printKot) {
           const orderToPrint = {
             ...updatedOrderData,
             table_name: selectedTableLive.table_name || selectedTableLive.table_number || 'COUNTER',
@@ -805,14 +817,7 @@ export default function ParcelManagement() {
             captain_name: updatedOrderData?.captain_name || activeOrderForSelectedTable?.captain_name || 'ADMIN',
             items: deltaItems
           };
-          if (printKot) {
-            console.log('[PARCEL] Calling printKOT for updated order (delta only):', orderToPrint);
-            await printKOT(orderToPrint);
-          } else {
-            console.log('[PARCEL] printKot is false, skipping print.');
-          }
-        } else {
-          console.log('[PARCEL] No new items with positive delta, skipping KOT print.');
+          await printKOT(orderToPrint);
         }
 
         setIsAddingItems(false);
@@ -820,6 +825,7 @@ export default function ParcelManagement() {
         setCheckoutOrder(updatedOrderData);
         fetchTables();
         fetchOrders();
+        return updatedOrderData;
       } else {
         throw new Error(res.data.message || 'Failed to update KOT');
       }
@@ -828,6 +834,7 @@ export default function ParcelManagement() {
       toast.error(`❌ Failed to update KOT: ${err.message}`, {
         style: { borderRadius: '10px', background: '#e11d48', color: '#fff' }
       });
+      return null;
     } finally {
       setIsSubmittingAdditional(false);
     }
@@ -847,8 +854,8 @@ export default function ParcelManagement() {
 
       const res = await authorizedFetch(
         `${API_BASE}/orders/pay/${orderId}?hotelId=${hotelId}`,
-        { 
-          method: 'POST', 
+        {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ paymentMode: selectedPaymentMode || 'CASH' })
         }
@@ -866,11 +873,49 @@ export default function ParcelManagement() {
     }
   };
 
+  const handleSaveAndEBill = async (table, order) => {
+    if (!table || !order) return;
+
+    const dateStr = formatDateDDMMYYYY(new Date());
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    const subtotalValue = Number(order.subtotal) || 0;
+    const cgstValue = Number(order.cgst) || 0;
+    const sgstValue = Number(order.sgst) || 0;
+    const grandTotalValue = Number(order.grand_total) || 0;
+    const serviceChargeValue = Math.max(0, grandTotalValue - subtotalValue - cgstValue - sgstValue);
+
+    const billSnapshot = {
+      hotelName: systemSettings?.branding?.name || 'MEJWANI',
+      address: systemSettings?.branding?.address || '',
+      phone: systemSettings?.branding?.phone || '',
+      gstNumber: systemSettings?.billing?.gstNumber || '',
+      tableName: table.table_name,
+      invoiceId: `INV-${order.id}`,
+      dateTime: `${dateStr} ${timeStr}`,
+      paymentMode: selectedPaymentMode || 'CASH',
+      items: order.items || [],
+      subtotal: subtotalValue,
+      cgst: cgstValue,
+      sgst: sgstValue,
+      serviceCharge: serviceChargeValue,
+      grandTotal: grandTotalValue
+    };
+
+    if (order.status !== 'COMPLETED') {
+      await handleCompletePayment(order.id, false);
+    }
+
+    setSelectedTable(null);
+    setEBillModalData(billSnapshot);
+    toast.success('✅ Payment settled & E-Bill generated!');
+  };
+
   const handleCancelBill = async (orderId) => {
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
       const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
-      
+
       const res = await authorizedFetch(
         `${API_BASE}/bills/${orderId}/cancel?hotelId=${hotelId}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' } }
@@ -906,9 +951,8 @@ export default function ParcelManagement() {
       return;
     }
 
-    // Duplicate check on frontend
-    const isDuplicate = tables.some(t => 
-      t.section_name?.toUpperCase() === 'PARCEL' && 
+    const isDuplicate = tables.some(t =>
+      t.section_name?.toUpperCase() === 'PARCEL' &&
       t.table_number.toUpperCase() === formTableNumber.trim().toUpperCase()
     );
     if (isDuplicate) {
@@ -965,9 +1009,8 @@ export default function ParcelManagement() {
       return;
     }
 
-    // Duplicate check on frontend
-    const isDuplicate = tables.some(t => 
-      t.section_name?.toUpperCase() === 'PARCEL' && 
+    const isDuplicate = tables.some(t =>
+      t.section_name?.toUpperCase() === 'PARCEL' &&
       t.table_number.toUpperCase() === formTableNumber.trim().toUpperCase() &&
       t.id !== editingTable.id
     );
@@ -1049,7 +1092,6 @@ export default function ParcelManagement() {
       address,
       gstNumber,
       tableNumber,
-      cashierName,
       captainName,
       orderId,
       dateTime,
@@ -1062,7 +1104,6 @@ export default function ParcelManagement() {
       cgstRate,
       sgstRate,
       serviceChargeRate,
-      currencySymbol,
       phone
     } = billData;
 
@@ -1195,47 +1236,47 @@ export default function ParcelManagement() {
   };
 
   const handleThermalPrintDirect = async (table, order, suppressToast = false) => {
-    if (printerConfig && !printerConfig.bill) {
-      showPrinterErrorToast('Bill Printer is not configured.', 'bill-print-error');
+    const dateStr = formatDateDDMMYYYY(new Date());
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    const subtotalValue = Number(order.subtotal) || 0;
+    const cgstValue = Number(order.cgst) || 0;
+    const sgstValue = Number(order.sgst) || 0;
+    const grandTotalValue = Number(order.grand_total) || 0;
+    const serviceChargeValue = Math.max(0, grandTotalValue - subtotalValue - cgstValue - sgstValue);
+
+    const billData = {
+      hotelName: systemSettings.branding.name,
+      address: systemSettings.branding.address,
+      phone: systemSettings.branding.phone,
+      gstNumber: systemSettings.billing.gstNumber,
+      tableNumber: `${table.table_code || table.table_name} (${table.section_name})`,
+      cashierName: "Counter",
+      captainName: order.captain_name || 'ADMIN',
+      orderId: `ORD-${order.id}`,
+      dateTime: `${dateStr} ${timeStr}`,
+      items: order.items || [],
+      subtotal: subtotalValue,
+      cgst: cgstValue,
+      sgst: sgstValue,
+      serviceCharge: serviceChargeValue,
+      grandTotal: grandTotalValue,
+      cgstRate: Number(systemSettings.billing.cgst) || 0,
+      sgstRate: Number(systemSettings.billing.sgst) || 0,
+      serviceChargeRate: Number(systemSettings.billing.serviceCharge) || 0,
+      currencySymbol: systemSettings.billing.currencySymbol
+    };
+
+    if (!printerConfig || !printerConfig.bill) {
+      handleThermalPrint(billData);
       return;
     }
+
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
       const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
       const tableName = table.table_code || table.table_name || 'Table';
 
-      const dateStr = formatDateDDMMYYYY(new Date());
-      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-
-      const subtotalValue = Number(order.subtotal) || 0;
-      const cgstValue = Number(order.cgst) || 0;
-      const sgstValue = Number(order.sgst) || 0;
-      const grandTotalValue = Number(order.grand_total) || 0;
-      const serviceChargeValue = Math.max(0, grandTotalValue - subtotalValue - cgstValue - sgstValue);
-
-      const billData = {
-        hotelName: systemSettings.branding.name,
-        address: systemSettings.branding.address,
-        phone: systemSettings.branding.phone,
-        gstNumber: systemSettings.billing.gstNumber,
-        tableNumber: `${table.table_code || table.table_name} (${table.section_name})`,
-        cashierName: "Counter",
-        captainName: order.captain_name || 'ADMIN',
-        orderId: `ORD-${order.id}`,
-        dateTime: `${dateStr} ${timeStr}`,
-        items: order.items || [],
-        subtotal: subtotalValue,
-        cgst: cgstValue,
-        sgst: sgstValue,
-        serviceCharge: serviceChargeValue,
-        grandTotal: grandTotalValue,
-        cgstRate: Number(systemSettings.billing.cgst) || 0,
-        sgstRate: Number(systemSettings.billing.sgst) || 0,
-        serviceChargeRate: Number(systemSettings.billing.serviceCharge) || 0,
-        currencySymbol: systemSettings.billing.currencySymbol
-      };
-
-      // 1. Queue job on cloud first to get the unique Job ID (approx 50ms)
       const response = await fetch(`${API_BASE}/bills/print?hotelId=${hotelId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1244,31 +1285,27 @@ export default function ParcelManagement() {
       const data = await response.json();
       if (!data.success) {
         if (data.code === 'PRINTER_NOT_CONFIGURED' || data.code === 'PRINTER_OFFLINE') {
-          showPrinterErrorToast(data.message, 'bill-print-error');
+          handleThermalPrint(billData);
           return;
         }
         throw new Error(data.message || 'Direct print failed');
       }
 
       const jobId = data.jobId;
-      console.log('[DEBUG] Print job created:', jobId);
-
       if (typeof window.mejwani_start_ack_timeout === 'function') {
         window.mejwani_start_ack_timeout(jobId, 'BILL');
       }
 
-      // 2. Try direct local print next
-      const isLocalHost = window.location.hostname === 'localhost' || 
-                          window.location.hostname === '127.0.0.1' || 
-                          window.location.hostname.startsWith('192.168.') || 
-                          window.location.hostname.startsWith('10.') || 
-                          window.location.hostname.startsWith('172.') || 
+      const isLocalHost = window.location.hostname === 'localhost' ||
+                          window.location.hostname === '127.0.0.1' ||
+                          window.location.hostname.startsWith('192.168.') ||
+                          window.location.hostname.startsWith('10.') ||
+                          window.location.hostname.startsWith('172.') ||
                           window.location.hostname.endsWith('.local');
       if (isLocalHost) {
         try {
-          console.log('[DEBUG] Local agent print started:', jobId);
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 1000); // 1000ms local agent timeout
+          const timeoutId = setTimeout(() => controller.abort(), 1000);
           const localResponse = await fetch('http://127.0.0.1:9111/print', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1278,75 +1315,67 @@ export default function ParcelManagement() {
           const localData = await localResponse.json();
           clearTimeout(timeoutId);
           if (localData.success) {
-            console.log('[DEBUG] Local print success:', jobId);
             onPrintJobAcknowledgedLocal(jobId, tableName, 'BILL');
             return;
           }
         } catch (localErr) {
-          console.log('[DEBUG] Local print failure:', jobId, '. Cloud fallback triggered.', localErr.message);
+          handleThermalPrint(billData);
+          return;
         }
       }
 
-      // 3. Fallback: Trigger print agent to poll the queued job immediately
-      console.log('[DEBUG] Cloud fallback triggered for job:', jobId);
       if (isLocalHost) {
         fetch('http://127.0.0.1:9111/trigger-poll').catch(() => { });
       }
       onPrintJobAcknowledgedLocal(jobId, tableName, 'BILL');
 
     } catch (err) {
-      console.error('Direct print error', err);
-      toast.error('❌ Failed to process printing request.');
+      console.error('Direct print error, opening browser print fallback:', err);
+      handleThermalPrint(billData);
     }
   };
 
   const printKOT = async (order) => {
-    console.log('[DEBUG] printKOT called for order:', order.id);
-    if (printerConfig && !printerConfig.kot) {
-      showPrinterErrorToast('KOT Printer is not configured.', `kot-fail-${order.id}`);
+    const tableName = order.table_name || order.table_number || 'COUNTER';
+    const kotData = {
+      title: systemSettings?.printing?.kotTitle || 'KITCHEN ORDER TICKET',
+      hotelName: systemSettings?.branding?.name || 'MEJWANI',
+      tableName: tableName,
+      sectionName: order.section_name || 'PARCEL',
+      captainName: order.captain_name || 'ADMIN',
+      orderId: order.kot_number || order.id,
+      dateTime: order.created_at ? formatDateTimeDDMMYYYY(order.created_at) : formatDateTimeDDMMYYYY(new Date()),
+      items: (order.items || []).map(item => ({
+        name: item.name || item.itemName,
+        quantity: item.quantity || item.qty || 1,
+        note: item.note
+      }))
+    };
+
+    if (!printerConfig || !printerConfig.kot) {
+      openBrowserPrintKOT(kotData);
       return;
     }
+
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
       const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
-      const tableName = order.table_name || order.table_number || 'COUNTER';
 
-       const kotData = {
-        title: systemSettings?.printing?.kotTitle || 'KITCHEN ORDER TICKET',
-        hotelName: systemSettings?.branding?.name || 'MEJWANI',
-        tableName: tableName,
-        sectionName: order.section_name || 'PARCEL',
-        captainName: order.captain_name || 'ADMIN',
-        orderId: order.kot_number || order.id,
-        dateTime: order.created_at ? formatDateTimeDDMMYYYY(order.created_at) : formatDateTimeDDMMYYYY(new Date()),
-        items: (order.items || []).map(item => ({
-          name: item.name || item.itemName,
-          quantity: item.quantity || item.qty || 1,
-          note: item.note
-        }))
-      };
-
-      console.log('[KOT] User clicked Send KOT');
-      console.log('[DEBUG] printKOT sending API request to print-kot. Payload:', kotData);
       const printRes = await fetch(`${API_BASE}/orders/print-kot?hotelId=${hotelId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(kotData)
       });
       const printData = await printRes.json();
-      console.log('[DEBUG] printKOT print-kot API response:', printData);
       if (!printData.success) {
         if (printData.code === 'PRINTER_NOT_CONFIGURED' || printData.code === 'PRINTER_OFFLINE') {
-          showPrinterErrorToast(printData.message, `kot-fail-${order.id}`);
+          openBrowserPrintKOT(kotData);
           return;
         }
         throw new Error(printData.message || 'Direct print failed');
       }
 
       const jobId = printData.jobId;
-      console.log('[DEBUG] Print job created:', jobId);
-      console.log(`[KOT] Print Job ID: ${jobId}`);
-
       if (typeof window.mejwani_start_ack_timeout === 'function') {
         window.mejwani_start_ack_timeout(jobId, 'KOT');
       }
@@ -1355,9 +1384,8 @@ export default function ParcelManagement() {
       const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       if (isLocalHost) {
         try {
-          console.log('[DEBUG] Local agent print started:', jobId);
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 1000); // 1000ms timeout
+          const timeoutId = setTimeout(() => controller.abort(), 1000);
           const localResponse = await fetch('http://127.0.0.1:9111/print', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1367,41 +1395,22 @@ export default function ParcelManagement() {
           const localData = await localResponse.json();
           clearTimeout(timeoutId);
           if (localData.success) {
-            console.log('[DEBUG] Local print success:', jobId);
             localPrintSuccess = true;
             onPrintJobAcknowledgedLocal(jobId, tableName, 'KOT');
           }
         } catch (localErr) {
-          console.log('[DEBUG] Local print failure:', jobId, '. Cloud fallback triggered.', localErr.message);
+          openBrowserPrintKOT(kotData);
+          return;
         }
       }
 
-      if (!localPrintSuccess) {
-        console.log('[DEBUG] Cloud fallback triggered for job:', jobId);
-        if (isLocalHost) {
-          console.log('[KOT] Trigger poll called');
-          fetch('http://127.0.0.1:9111/trigger-poll').catch(() => { });
-        }
-        onPrintJobAcknowledgedLocal(jobId, tableName, 'KOT');
+      if (!localPrintSuccess && isLocalHost) {
+        fetch('http://127.0.0.1:9111/trigger-poll').catch(() => { });
       }
-
     } catch (err) {
-      console.error('[KOT Print] Direct KOT print error:', err);
-      toast.error(`❌ KOT print failed: ${err.message}`, {
-        style: { borderRadius: '10px', background: '#e11d48', color: '#fff' }
-      });
+      console.error('[KOT Print] Falling back to browser KOT print:', err);
+      openBrowserPrintKOT(kotData);
     }
-  };
-
-  const handlePrintAndCompleteBill = (orderId) => {
-    if (printerConfig && !printerConfig.bill) {
-      showPrinterErrorToast('Bill Printer is not configured.', 'bill-print-error');
-      return;
-    }
-    if (selectedTableLive && activeOrderForSelectedTable) {
-      handleThermalPrintDirect(selectedTableLive, activeOrderForSelectedTable, false);
-    }
-    handleCompletePayment(orderId);
   };
 
   return (
@@ -1461,38 +1470,7 @@ export default function ParcelManagement() {
           /* RESPONSIVE PARCEL TABLES GRID */
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 animate-in fade-in duration-300">
             {parcelTables.map((table) => {
-              const isSelected = selectedTableLive?.id === table.id;
               const order = orders.find(o => o.table_id === table.id && o.status !== 'COMPLETED' && o.status !== 'CANCELLED');
-              const itemsCount = order?.items?.reduce((sum, i) => sum + i.quantity, 0) || 0;
-
-              // Color mappings
-              let cardStyle = 'border-slate-200 dark:border-white/5 bg-white dark:bg-[#0d0d0d] hover:border-emerald-500/20 shadow-sm';
-              let badge = (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[8px] font-black uppercase text-emerald-500 tracking-wider">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> VACANT
-                </span>
-              );
-
-              if (table.status === 'occupied') {
-                cardStyle = isSelected ? 'border-rose-500 bg-rose-500/5 shadow-lg shadow-rose-500/5' : 'border-rose-500/30 dark:border-rose-500/10 bg-white dark:bg-[#0d0d0d] hover:border-rose-500/50 shadow-sm';
-                badge = (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/20 text-[8px] font-black uppercase text-rose-500 tracking-wider">
-                    <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-ping" /> OCCUPIED
-                  </span>
-                );
-              } else if (table.status === 'bill_pending') {
-                cardStyle = isSelected ? 'border-amber-500 bg-amber-500/5 shadow-lg shadow-amber-500/5' : 'border-amber-500/30 dark:border-amber-500/10 bg-white dark:bg-[#0d0d0d] hover:border-amber-500/50 shadow-sm';
-                badge = (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[8px] font-black uppercase text-amber-500 tracking-wider">
-                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" /> BILL PENDING
-                  </span>
-                );
-              }
-
-              if (!table.is_active) {
-                cardStyle += ' opacity-40 cursor-not-allowed';
-              }
-
               const isOccupied = table.status === 'occupied' || table.status === 'bill_pending' || !!order;
 
               return (
@@ -1671,25 +1649,21 @@ export default function ParcelManagement() {
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-white/5 text-xs text-slate-700 dark:text-slate-200 font-bold">
                               {filteredMenuItems.map((item, idx) => {
-                                const hasHalfFull = item.pricing_type === 'HALF_FULL';
-                                const qtySingle = additionalItems.filter(c => c.cartId === `${item.originalId || item._id || item.id}_FULL`).reduce((sum, c) => sum + c.quantity, 0);
-                                const qtyHalf = additionalItems.filter(c => c.cartId === `${item.originalId || item._id || item.id}_HALF`).reduce((sum, c) => sum + c.quantity, 0);
-                                const qtyFull = additionalItems.filter(c => c.cartId === `${item.originalId || item._id || item.id}_FULL`).reduce((sum, c) => sum + c.quantity, 0);
+                                const baseId = item.originalId || item._id || item.id;
+                                const portionType = item.portion_type || item.portionType || 'FULL';
+                                const targetCartId = `${baseId}_${portionType}`;
+                                const qtySingle = additionalItems.filter(c => c.cartId === targetCartId).reduce((sum, c) => sum + c.quantity, 0);
 
                                 return (
-                                  <tr 
-                                    key={item._id || item.id} 
+                                  <tr
+                                    key={item._id || item.id}
                                     style={!item.isAvailable ? { filter: 'grayscale(60%)', opacity: 0.6 } : undefined}
                                     onClick={(e) => {
                                       if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) {
                                         return;
                                       }
                                       if (item.isAvailable) {
-                                        if (hasHalfFull) {
-                                          handleAddAdditionalItem(item, 'FULL');
-                                        } else {
-                                          handleAddAdditionalItem(item);
-                                        }
+                                        handleAddAdditionalItem(item);
                                       }
                                     }}
                                     className={`hover:bg-slate-50/50 dark:hover:bg-white/[0.01] cursor-pointer transition-all ${
@@ -1711,132 +1685,47 @@ export default function ParcelManagement() {
                                     </td>
                                     <td className="p-3 text-[10px] text-slate-400 uppercase tracking-wider">{item.category || 'ITEM'}</td>
                                     <td className="p-3 text-right font-black text-slate-800 dark:text-white">
-                                      {hasHalfFull ? (
-                                        <div className="flex flex-col text-[10px] text-slate-500 font-bold">
-                                          <span>Half: {formatCurrency(item.half_price)}</span>
-                                          <span>Full: {formatCurrency(item.full_price)}</span>
-                                        </div>
-                                      ) : (
-                                        formatCurrency(item.price)
-                                      )}
+                                      {formatCurrency(item.price)}
                                     </td>
                                     <td className="p-3 text-right">
                                       {!item.isAvailable ? (
                                         <span className="text-[10px] uppercase font-bold text-rose-500 bg-rose-500/10 px-2 py-1 rounded-lg">Unavailable</span>
-                                      ) : hasHalfFull ? (
-                                        <div className="inline-flex gap-1.5">
-                                          {qtyHalf > 0 ? (
-                                            <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-white/5 p-0.5 rounded-lg border border-slate-200 dark:border-white/10">
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handleAdditionalQuantity(`${item.originalId || item._id || item.id}_HALF`, -1);
-                                                }}
-                                                className="p-0.5 rounded bg-white dark:bg-white/10 text-slate-500 hover:text-[#ff6b00] cursor-pointer"
-                                              >
-                                                <Minus className="w-2.5 h-2.5" />
-                                              </button>
-                                              <span className="px-1 text-[10px] font-black text-slate-800 dark:text-white">Half: {qtyHalf}</span>
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handleAddAdditionalItem(item, 'HALF');
-                                                }}
-                                                className="p-0.5 rounded bg-white dark:bg-white/10 text-[#ff6b00] hover:bg-orange-500/10 cursor-pointer"
-                                              >
-                                                <Plus className="w-2.5 h-2.5" />
-                                              </button>
-                                            </div>
-                                          ) : (
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleAddAdditionalItem(item, 'HALF');
-                                              }}
-                                              className="px-2.5 py-1 bg-orange-500/10 hover:bg-[#ff6b00] hover:text-white border border-orange-500/20 text-[9px] font-black uppercase rounded-lg transition-all cursor-pointer"
-                                            >
-                                              Half
-                                            </button>
-                                          )}
-
-                                          {qtyFull > 0 ? (
-                                            <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-white/5 p-0.5 rounded-lg border border-slate-200 dark:border-white/10">
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handleAdditionalQuantity(`${item.originalId || item._id || item.id}_FULL`, -1);
-                                                }}
-                                                className="p-0.5 rounded bg-white dark:bg-white/10 text-slate-500 hover:text-[#ff6b00] cursor-pointer"
-                                              >
-                                                <Minus className="w-2.5 h-2.5" />
-                                              </button>
-                                              <span className="px-1 text-[10px] font-black text-slate-800 dark:text-white">Full: {qtyFull}</span>
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handleAddAdditionalItem(item, 'FULL');
-                                                }}
-                                                className="p-0.5 rounded bg-white dark:bg-white/10 text-[#ff6b00] hover:bg-orange-500/10 cursor-pointer"
-                                              >
-                                                <Plus className="w-2.5 h-2.5" />
-                                              </button>
-                                            </div>
-                                          ) : (
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleAddAdditionalItem(item, 'FULL');
-                                              }}
-                                              className="px-2.5 py-1 bg-orange-500/10 hover:bg-[#ff6b00] hover:text-white border border-orange-500/20 text-[9px] font-black uppercase rounded-lg transition-all cursor-pointer"
-                                            >
-                                              Full
-                                            </button>
-                                          )}
-                                        </div>
-                                      ) : (
-                                        qtySingle > 0 ? (
-                                          <div className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-white/5 p-1 rounded-lg border border-slate-200 dark:border-white/10 select-none">
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleAdditionalQuantity(`${item.originalId || item._id || item.id}_FULL`, -1);
-                                              }}
-                                              className="p-1 rounded bg-white dark:bg-white/10 text-slate-500 hover:text-[#ff6b00] cursor-pointer"
-                                            >
-                                              <Minus className="w-3 h-3" />
-                                            </button>
-                                            <span className="px-2 text-xs font-black text-slate-800 dark:text-white min-w-[16px] text-center">{qtySingle}</span>
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleAddAdditionalItem(item);
-                                              }}
-                                              className="p-1 rounded bg-white dark:bg-white/10 text-[#ff6b00] hover:bg-orange-500/10 cursor-pointer"
-                                            >
-                                              <Plus className="w-3 h-3" />
-                                            </button>
-                                          </div>
-                                        ) : (
+                                      ) : qtySingle > 0 ? (
+                                        <div className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-white/5 p-1 rounded-lg border border-slate-200 dark:border-white/10 select-none">
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleAdditionalQuantity(targetCartId, -1);
+                                            }}
+                                            className="p-1 rounded bg-white dark:bg-white/10 text-slate-500 hover:text-[#ff6b00] cursor-pointer"
+                                          >
+                                            <Minus className="w-3 h-3" />
+                                          </button>
+                                          <span className="px-2 text-xs font-black text-slate-800 dark:text-white min-w-[16px] text-center">{qtySingle}</span>
                                           <button
                                             type="button"
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               handleAddAdditionalItem(item);
                                             }}
-                                            className="px-3.5 py-1.5 bg-orange-500 hover:bg-[#e66000] text-white text-[10px] font-black uppercase tracking-wider rounded-lg shadow transition-all cursor-pointer inline-flex items-center gap-1.5"
+                                            className="p-1 rounded bg-white dark:bg-white/10 text-[#ff6b00] hover:bg-orange-500/10 cursor-pointer"
                                           >
                                             <Plus className="w-3 h-3" />
-                                            Add
                                           </button>
-                                        )
+                                        </div>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleAddAdditionalItem(item);
+                                          }}
+                                          className="px-3.5 py-1.5 bg-orange-500 hover:bg-[#e66000] text-white text-[10px] font-black uppercase tracking-wider rounded-lg shadow transition-all cursor-pointer inline-flex items-center gap-1.5"
+                                        >
+                                          <Plus className="w-3 h-3" />
+                                          Add
+                                        </button>
                                       )}
                                     </td>
                                   </tr>
@@ -1849,7 +1738,9 @@ export default function ParcelManagement() {
                     ) : (
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {filteredMenuItems.map((item, idx) => {
-                          const targetCartId = `${item.originalId || item._id || item.id}_\${item.portion_type || item.portionType || 'FULL'}`;
+                          const baseId = item.originalId || item._id || item.id;
+                          const portionType = item.portion_type || item.portionType || 'FULL';
+                          const targetCartId = `${baseId}_${portionType}`;
                           const qtyInCart = additionalItems.filter(c => c.cartId === targetCartId).reduce((sum, c) => sum + c.quantity, 0);
                           const isAlreadyAdded = qtyInCart > 0;
                           return (
@@ -1857,19 +1748,19 @@ export default function ParcelManagement() {
                               key={item._id || item.id}
                               style={!item.isAvailable ? { filter: 'grayscale(60%)' } : undefined}
                               onClick={() => {
-                                if (item.isAvailable && item.pricing_type !== 'HALF_FULL') {
+                                if (item.isAvailable) {
                                   handleAddAdditionalItem(item);
                                 }
                               }}
                               className={`relative p-3 rounded-xl border text-left bg-white dark:bg-[#0a0a0a] transition-all group ${
                                 idx === menuSearchHighlightedIndex
                                   ? 'ring-2 ring-orange-500 border-orange-500 shadow-md scale-[1.01]'
-                                  : (!item.isAvailable 
-                                    ? 'opacity-50 cursor-not-allowed' 
-                                    : isAlreadyAdded 
-                                      ? 'border-orange-500 shadow-sm hover:shadow-md' 
-                                      : 'border-slate-200 dark:border-white/10 hover:border-orange-400 hover:shadow-md')
-                              } ${item.isAvailable && item.pricing_type !== 'HALF_FULL' ? 'cursor-pointer active:scale-[0.98]' : ''}`}
+                                  : (!item.isAvailable
+                                    ? 'opacity-50 cursor-not-allowed'
+                                    : isAlreadyAdded
+                                    ? 'border-orange-500 shadow-sm hover:shadow-md'
+                                    : 'border-slate-200 dark:border-white/10 hover:border-orange-400 hover:shadow-md')
+                              } ${item.isAvailable ? 'cursor-pointer active:scale-[0.98]' : ''}`}
                             >
                               {isAlreadyAdded && (
                                 <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-orange-500/10 dark:bg-orange-500/20 text-[#ff6b00] text-[8px] font-black uppercase tracking-wider">
@@ -1889,57 +1780,24 @@ export default function ParcelManagement() {
                                 )}
                               </p>
                               <p className="text-[9px] text-slate-400 dark:text-white/30 font-bold uppercase tracking-wider mt-0.5 truncate">{item.category || 'ITEM'}</p>
-                              
-                              {item.pricing_type === 'HALF_FULL' ? (
-                                <div className="flex flex-col gap-1.5 mt-2">
-                                  <button
-                                    type="button"
-                                    disabled={!item.isAvailable}
-                                    onClick={(e) => { e.stopPropagation(); handleAddAdditionalItem(item, 'HALF'); }}
-                                    className="w-full py-1 px-2 rounded-lg bg-orange-500/5 hover:bg-orange-500/10 border border-orange-500/20 text-[10px] font-black text-slate-800 dark:text-white flex justify-between items-center cursor-pointer"
-                                  >
-                                    <span>Half</span>
-                                    <span className="text-[#ff6b00]">₹{parseFloat(item.half_price || 0).toFixed(0)}</span>
-                                    {(additionalItems.find(c => c.cartId === `${item._id || item.id}_HALF`)?.quantity || 0) > 0 && (
-                                      <span className="px-1 py-0.5 rounded bg-orange-500 text-white text-[8px] font-bold">
-                                        {additionalItems.find(c => c.cartId === `${item._id || item.id}_HALF`).quantity}
-                                      </span>
-                                    )}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={!item.isAvailable}
-                                    onClick={(e) => { e.stopPropagation(); handleAddAdditionalItem(item, 'FULL'); }}
-                                    className="w-full py-1 px-2 rounded-lg bg-orange-500/5 hover:bg-orange-500/10 border border-orange-500/20 text-[10px] font-black text-slate-800 dark:text-white flex justify-between items-center cursor-pointer"
-                                  >
-                                    <span>Full</span>
-                                    <span className="text-[#ff6b00]">₹{parseFloat(item.full_price || 0).toFixed(0)}</span>
-                                    {(additionalItems.find(c => c.cartId === `${item._id || item.id}_FULL`)?.quantity || 0) > 0 && (
-                                      <span className="px-1 py-0.5 rounded bg-orange-500 text-white text-[8px] font-bold">
-                                        {additionalItems.find(c => c.cartId === `${item._id || item.id}_FULL`).quantity}
-                                      </span>
-                                    )}
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  disabled={!item.isAvailable}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleAddAdditionalItem(item);
-                                  }}
-                                  className="w-full mt-2 py-1 px-2 bg-slate-50 hover:bg-orange-500/10 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[10px] font-black text-slate-800 dark:text-white flex justify-between items-center cursor-pointer"
-                                >
-                                  <span>Price</span>
-                                  <span className="text-[#ff6b00]">₹{parseFloat(item.price || 0).toFixed(0)}</span>
-                                  {(additionalItems.find(c => c.cartId === `${item._id || item.id}_FULL`)?.quantity || 0) > 0 && (
-                                    <span className="px-1 py-0.5 rounded bg-orange-500 text-white text-[8px] font-bold">
-                                      {additionalItems.find(c => c.cartId === `${item._id || item.id}_FULL`).quantity}
-                                    </span>
-                                  )}
-                                </button>
-                              )}
+
+                              <button
+                                type="button"
+                                disabled={!item.isAvailable}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAddAdditionalItem(item);
+                                }}
+                                className="w-full mt-2 py-1 px-2 bg-slate-50 hover:bg-orange-500/10 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[10px] font-black text-slate-800 dark:text-white flex justify-between items-center cursor-pointer"
+                              >
+                                <span>Price</span>
+                                <span className="text-[#ff6b00]">₹{parseFloat(item.price || 0).toFixed(0)}</span>
+                                {qtyInCart > 0 && (
+                                  <span className="px-1 py-0.5 rounded bg-orange-500 text-white text-[8px] font-bold">
+                                    {qtyInCart}
+                                  </span>
+                                )}
+                              </button>
                             </div>
                           );
                         })}
@@ -2060,12 +1918,11 @@ export default function ParcelManagement() {
                       </div>
                       <div className="text-[8px] text-slate-400 font-bold bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg p-2 text-center">
                         {isCreatingDirectOrder
-                          ? 'This will place order, print KOT, and mark table OCCUPIED.'
+                          ? 'This will place order, print KOT, and send order to Kitchen Display.'
                           : 'This will modify active order items in the KOT session.'
                         }
                       </div>
                       <div className="flex gap-2">
-                        {/* Save (silently without KOT print) */}
                         <button
                           onClick={() => {
                             if (isCreatingDirectOrder) {
@@ -2087,7 +1944,6 @@ export default function ParcelManagement() {
                           )}
                         </button>
 
-                        {/* Save & KOT (saves and prints KOT) */}
                         <button
                           onClick={() => {
                             if (isCreatingDirectOrder) {
@@ -2105,6 +1961,33 @@ export default function ParcelManagement() {
                             <>
                               <Printer className="w-4 h-4" />
                               Save & KOT
+                            </>
+                          )}
+                        </button>
+
+                        {/* नवीन 'Save, KOT & Bill' बटण */}
+                        <button
+                          onClick={async () => {
+                            let resOrder = null;
+                            if (isCreatingDirectOrder) {
+                              resOrder = await handleSendToKot({ printKot: true });
+                            } else {
+                              resOrder = await handleSubmitAdditionalItems({ printKot: true });
+                            }
+
+                            if (resOrder && selectedTableLive) {
+                              handleThermalPrintDirect(selectedTableLive, resOrder, false);
+                            }
+                          }}
+                          disabled={isCreatingDirectOrder ? isSubmittingDirectOrder : isSubmittingAdditional}
+                          className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
+                        >
+                          {(isCreatingDirectOrder ? isSubmittingDirectOrder : isSubmittingAdditional) ? (
+                            <span className="animate-pulse">Saving...</span>
+                          ) : (
+                            <>
+                              <Printer className="w-4 h-4" />
+                              Save, KOT & Bill
                             </>
                           )}
                         </button>
@@ -2169,10 +2052,10 @@ export default function ParcelManagement() {
                           <table className="w-full text-left border-collapse">
                             <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-[#1a1a1a]">
                               <tr className="border-b border-slate-200 dark:border-white/5 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-white/40">
-                                        <th className="p-3">Item</th>
-                                        <th className="p-3 text-center">Qty</th>
-                                        <th className="p-3 text-right">Price</th>
-                                        <th className="p-3 text-right">Amount</th>
+                                <th className="p-3">Item</th>
+                                <th className="p-3 text-center">Qty</th>
+                                <th className="p-3 text-right">Price</th>
+                                <th className="p-3 text-right">Amount</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-white/5 text-xs text-slate-700 dark:text-slate-200 font-semibold">
@@ -2291,9 +2174,8 @@ export default function ParcelManagement() {
                         Save & Print
                       </button>
                       <button
-                        disabled={checkoutOrder.status === 'COMPLETED'}
-                        onClick={() => handleCompletePayment(checkoutOrder.id, false)}
-                        className="flex-1 px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => handleSaveAndEBill(selectedTableLive, checkoutOrder)}
+                        className="flex-1 px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                       >
                         Save & EBill
                       </button>
@@ -2318,7 +2200,7 @@ export default function ParcelManagement() {
                       </button>
                     </div>
 
-                    {/* Row 3: Settle & Save (stands out) */}
+                    {/* Row 3: Settle & Save */}
                     <div className="pt-3 border-t border-slate-100 dark:border-white/5 flex flex-col sm:flex-row justify-between items-center gap-3">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-slate-500 dark:text-white/40 uppercase">Settlement Amount:</span>
@@ -2465,6 +2347,113 @@ export default function ParcelManagement() {
         )}
 
       </div>
+
+      {/* Digital E-Bill Receipt Modal */}
+      {eBillModalData && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm">
+          <div className="relative w-full max-w-md bg-white dark:bg-[#111] border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-emerald-600 text-white p-5 text-center relative">
+              <button
+                onClick={() => setEBillModalData(null)}
+                className="absolute right-4 top-4 p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <span className="inline-block px-3 py-1 rounded-full bg-white/20 text-[10px] font-black uppercase tracking-widest mb-1">
+                Paid · {eBillModalData.paymentMode}
+              </span>
+              <h3 className="text-xl font-black tracking-tight">{eBillModalData.hotelName}</h3>
+              {eBillModalData.address && (
+                <p className="text-[11px] opacity-90 mt-0.5">{eBillModalData.address}</p>
+              )}
+              {eBillModalData.gstNumber && (
+                <p className="text-[10px] font-mono opacity-80 mt-0.5">GSTIN: {eBillModalData.gstNumber}</p>
+              )}
+            </div>
+
+            <div className="p-6 space-y-4 text-xs">
+              <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-3 text-slate-600 dark:text-slate-300 font-bold">
+                <div>
+                  <span className="text-[10px] text-slate-400 block uppercase">Invoice</span>
+                  <span className="text-slate-900 dark:text-white font-black">{eBillModalData.invoiceId}</span>
+                </div>
+                <div className="text-center">
+                  <span className="text-[10px] text-slate-400 block uppercase">Parcel</span>
+                  <span className="text-slate-900 dark:text-white font-black">{eBillModalData.tableName}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 block uppercase">Date</span>
+                  <span className="text-slate-900 dark:text-white font-black">{eBillModalData.dateTime}</span>
+                </div>
+              </div>
+
+              <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                {eBillModalData.items.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center font-bold text-slate-700 dark:text-slate-200">
+                    <div>
+                      <span>{item.name}</span>
+                      <span className="text-slate-400 text-[11px] ml-1.5">x{item.quantity}</span>
+                    </div>
+                    <span>{formatCurrency(item.price * item.quantity)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-t border-dashed border-slate-200 dark:border-white/10 pt-3 space-y-1.5 font-bold text-slate-500 dark:text-slate-400">
+                <div className="flex justify-between">
+                  <span>Subtotal</span>
+                  <span>{formatCurrency(eBillModalData.subtotal)}</span>
+                </div>
+                {eBillModalData.cgst > 0 && (
+                  <div className="flex justify-between">
+                    <span>CGST ({cgstRate}%)</span>
+                    <span>{formatCurrency(eBillModalData.cgst)}</span>
+                  </div>
+                )}
+                {eBillModalData.sgst > 0 && (
+                  <div className="flex justify-between">
+                    <span>SGST ({sgstRate}%)</span>
+                    <span>{formatCurrency(eBillModalData.sgst)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-base font-black text-slate-900 dark:text-white pt-2 border-t border-slate-200 dark:border-white/10">
+                  <span>Grand Total</span>
+                  <span className="text-[#ff6b00]">{formatCurrency(eBillModalData.grandTotal)}</span>
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const encodedData = window.btoa(unescape(encodeURIComponent(JSON.stringify(eBillModalData))));
+                    const eBillUrl = `${window.location.origin}/ebill?data=${encodedData}`;
+                    const msg = `*${eBillModalData.hotelName} - Digital E-Bill* 🧾\n\nInvoice: ${eBillModalData.invoiceId}\nParcel: ${eBillModalData.tableName}\nTotal Paid: *₹${eBillModalData.grandTotal.toFixed(2)}*\n\n👇 View & Download your E-Bill:\n${eBillUrl}\n\nThank you for ordering with us!`;
+                    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+                  }}
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer"
+                >
+                  Share on WhatsApp
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleThermalPrint({
+                    ...eBillModalData,
+                    orderId: eBillModalData.invoiceId,
+                    tableNumber: eBillModalData.tableName,
+                    cgstRate,
+                    sgstRate,
+                    serviceChargeRate
+                  })}
+                  className="px-5 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer"
+                >
+                  Print / PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }
