@@ -17,4 +17,3 @@ target/
 *.exe
 
 # Secret properties
-java-backend/src/main/resources/application.properties
