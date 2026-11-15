@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+* { margin:0; padding:0; }
+body { background:white; }
+.topbar { background:#1e3a5f; color:white; padding:8px 14px; display:flex; justify-content:space-between; align-items:center; }
+.topbar button { background:#2563eb; color:white; border:none; padding:6px 16px; border-radius:5px; font-size:12px; cursor:pointer; font-family:sans-serif; }
+.page { width:210mm; margin:0 auto; background:white; padding:6mm 4mm; }
+h2 { text-align:center; font-size:13pt; font-weight:bold; margin-bottom:2mm; font-family:'Times New Roman',serif; }
+h3 { text-align:center; font-size:11pt; margin-bottom:3mm; font-family:'Times New Roman',serif; }
+svg { width:100%; height:auto; display:block; }
+@media print {
+  .topbar { display:none; }
+  .page { width:100%; padding:4mm; }
+  @page { size:A4 portrait; margin:0; }
+}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <span style="font-family:sans-serif;font-size:13px;">🍽️ Mejwani — Use Case Diagram</span>
+  <button onclick="window.print()">🖨️ Print / Save PDF</button>
+</div>
+<div class="page">
+  <h2>3.3 Use Case Diagram</h2>
+  <h3>3.3.1 Mejwani Restaurant Management System — Use Case Diagram</h3>
+
+<svg viewBox="0 0 760 1020" xmlns="http://www.w3.org/2000/svg"
+     font-family="'Times New Roman', serif" font-size="10.5">
+
+  <!-- ══════════════════════════════════════
+       SYSTEM BOUNDARY BOX
+  ══════════════════════════════════════ -->
+  <rect x="195" y="20" width="375" height="980" fill="white" stroke="#000" stroke-width="1.8" rx="4"/>
+  <text x="382" y="42" text-anchor="middle" font-size="12" font-weight="bold">« System »</text>
+  <text x="382" y="58" text-anchor="middle" font-size="11" font-weight="bold">Mejwani Restaurant Mgmt</text>
+
+  <!-- ══════════════════════════════════════
+       STICK FIGURES (Actors)
+  ══════════════════════════════════════ -->
+
+  <!-- Super Admin (left, top) -->
+  <circle cx="85" cy="122" r="16" fill="white" stroke="#000" stroke-width="1.5"/>
+  <line x1="85" y1="138" x2="85" y2="185" stroke="#000" stroke-width="1.5"/>
+  <line x1="85" y1="150" x2="62" y2="168" stroke="#000" stroke-width="1.5"/>
+  <line x1="85" y1="150" x2="108" y2="168" stroke="#000" stroke-width="1.5"/>
+  <line x1="85" y1="185" x2="65" y2="210" stroke="#000" stroke-width="1.5"/>
+  <line x1="85" y1="185" x2="105" y2="210" stroke="#000" stroke-width="1.5"/>
+  <text x="85" y="228" text-anchor="middle" font-size="10" font-weight="bold">SUPER</text>
+  <text x="85" y="240" text-anchor="middle" font-size="10" font-weight="bold">ADMIN</text>
+
+  <!-- Admin (left, mid) -->
+  <circle cx="85" cy="390" r="16" fill="white" stroke="#000" stroke-width="1.5"/>
+  <line x1="85" y1="406" x2="85" y2="453" stroke="#000" stroke-width="1.5"/>
+  <line x1="85" y1="418" x2="62" y2="436" stroke="#000" stroke-width="1.5"/>
+  <line x1="85" y1="418" x2="108" y2="436" stroke="#000" stroke-width="1.5"/>
+  <line x1="85" y1="453" x2="65" y2="478" stroke="#000" stroke-width="1.5"/>
+  <line x1="85" y1="453" x2="105" y2="478" stroke="#000" stroke-width="1.5"/>
+  <text x="85" y="496" text-anchor="middle" font-size="10" font-weight="bold">ADMIN</text>
+
+  <!-- Captain (left, bottom) -->
+  <circle cx="85" cy="680" r="16" fill="white" stroke="#000" stroke-width="1.5"/>
+  <line x1="85" y1="696" x2="85" y2="743" stroke="#000" stroke-width="1.5"/>
+  <line x1="85" y1="708" x2="62" y2="726" stroke="#000" stroke-width="1.5"/>
+  <line x1="85" y1="708" x2="108" y2="726" stroke="#000" stroke-width="1.5"/>
+  <line x1="85" y1="743" x2="65" y2="768" stroke="#000" stroke-width="1.5"/>
+  <line x1="85" y1="743" x2="105" y2="768" stroke="#000" stroke-width="1.5"/>
+  <text x="85" y="786" text-anchor="middle" font-size="10" font-weight="bold">CAPTAIN</text>
+
+  <!-- Kitchen Staff (right, mid-top) -->
+  <circle cx="675" cy="490" r="16" fill="white" stroke="#000" stroke-width="1.5"/>
+  <line x1="675" y1="506" x2="675" y2="553" stroke="#000" stroke-width="1.5"/>
+  <line x1="675" y1="518" x2="652" y2="536" stroke="#000" stroke-width="1.5"/>
+  <line x1="675" y1="518" x2="698" y2="536" stroke="#000" stroke-width="1.5"/>
+  <line x1="675" y1="553" x2="655" y2="578" stroke="#000" stroke-width="1.5"/>
+  <line x1="675" y1="553" x2="695" y2="578" stroke="#000" stroke-width="1.5"/>
+  <text x="675" y="596" text-anchor="middle" font-size="10" font-weight="bold">KITCHEN</text>
+  <text x="675" y="608" text-anchor="middle" font-size="10" font-weight="bold">STAFF</text>
+
+  <!-- Customer (right, bottom) -->
+  <circle cx="675" cy="790" r="16" fill="white" stroke="#000" stroke-width="1.5"/>
+  <line x1="675" y1="806" x2="675" y2="853" stroke="#000" stroke-width="1.5"/>
+  <line x1="675" y1="818" x2="652" y2="836" stroke="#000" stroke-width="1.5"/>
+  <line x1="675" y1="818" x2="698" y2="836" stroke="#000" stroke-width="1.5"/>
+  <line x1="675" y1="853" x2="655" y2="878" stroke="#000" stroke-width="1.5"/>
+  <line x1="675" y1="853" x2="695" y2="878" stroke="#000" stroke-width="1.5"/>
+  <text x="675" y="896" text-anchor="middle" font-size="10" font-weight="bold">CUSTOMER</text>
+
+  <!-- ══════════════════════════════════════
+       USE CASE OVALS + ARROWS
+       (cx=382, spaced y=75 apart from y=90)
+  ══════════════════════════════════════ -->
+
+  <!-- USE CASE 1: Register / Login (y=90) — All -->
+  <ellipse cx="382" cy="90" rx="88" ry="22" fill="white" stroke="#000" stroke-width="1.3"/>
+  <text x="382" y="94" text-anchor="middle" font-size="10">Register / Login</text>
+  <line x1="101" y1="140" x2="294" y2="90" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+  <line x1="101" y1="405" x2="294" y2="90" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+  <line x1="101" y1="688" x2="294" y2="90" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+  <line x1="659" y1="500" x2="470" y2="90" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- USE CASE 2: Register Hotel (y=165) — SuperAdmin -->
+  <ellipse cx="382" cy="165" rx="88" ry="22" fill="white" stroke="#000" stroke-width="1.3"/>
+  <text x="382" y="169" text-anchor="middle" font-size="10">Register Hotel</text>
+  <line x1="101" y1="140" x2="294" y2="165" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- USE CASE 3: Manage Hotels (y=240) — SuperAdmin -->
+  <ellipse cx="382" cy="240" rx="88" ry="22" fill="white" stroke="#000" stroke-width="1.3"/>
+  <text x="382" y="244" text-anchor="middle" font-size="10">Manage Hotels</text>
+  <line x1="101" y1="145" x2="294" y2="240" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- USE CASE 4: View System Reports (y=315) — SuperAdmin + Admin -->
+  <ellipse cx="382" cy="315" rx="88" ry="22" fill="white" stroke="#000" stroke-width="1.3"/>
+  <text x="382" y="311" text-anchor="middle" font-size="10">View System</text>
+  <text x="382" y="323" text-anchor="middle" font-size="10">Reports</text>
+  <line x1="101" y1="150" x2="294" y2="315" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+  <line x1="101" y1="410" x2="294" y2="315" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- USE CASE 5: Manage Menu Items (y=390) — Admin -->
+  <ellipse cx="382" cy="390" rx="88" ry="22" fill="white" stroke="#000" stroke-width="1.3"/>
+  <text x="382" y="386" text-anchor="middle" font-size="10">Manage Menu</text>
+  <text x="382" y="398" text-anchor="middle" font-size="10">Items</text>
+  <line x1="101" y1="415" x2="294" y2="390" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- USE CASE 6: Manage Table Layout (y=465) — Admin + Captain -->
+  <ellipse cx="382" cy="465" rx="88" ry="22" fill="white" stroke="#000" stroke-width="1.3"/>
+  <text x="382" y="461" text-anchor="middle" font-size="10">Manage Table</text>
+  <text x="382" y="473" text-anchor="middle" font-size="10">Layout</text>
+  <line x1="101" y1="420" x2="294" y2="465" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+  <line x1="101" y1="698" x2="294" y2="465" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- USE CASE 7: Generate Bill (y=540) — Admin -->
+  <ellipse cx="382" cy="540" rx="88" ry="22" fill="white" stroke="#000" stroke-width="1.3"/>
+  <text x="382" y="544" text-anchor="middle" font-size="10">Generate Bill</text>
+  <line x1="101" y1="425" x2="294" y2="540" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- USE CASE 8: Manage Staff (y=615) — Admin -->
+  <ellipse cx="382" cy="615" rx="88" ry="22" fill="white" stroke="#000" stroke-width="1.3"/>
+  <text x="382" y="619" text-anchor="middle" font-size="10">Manage Staff</text>
+  <line x1="101" y1="430" x2="294" y2="615" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- USE CASE 9: View Kitchen Queue (y=690) — Admin + Kitchen -->
+  <ellipse cx="382" cy="690" rx="88" ry="22" fill="white" stroke="#000" stroke-width="1.3"/>
+  <text x="382" y="686" text-anchor="middle" font-size="10">View Kitchen</text>
+  <text x="382" y="698" text-anchor="middle" font-size="10">Queue</text>
+  <line x1="101" y1="435" x2="294" y2="690" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+  <line x1="659" y1="505" x2="470" y2="690" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- USE CASE 10: Take KOT Order (y=765) — Captain -->
+  <ellipse cx="382" cy="765" rx="88" ry="22" fill="white" stroke="#000" stroke-width="1.3"/>
+  <text x="382" y="761" text-anchor="middle" font-size="10">Take KOT</text>
+  <text x="382" y="773" text-anchor="middle" font-size="10">Order</text>
+  <line x1="101" y1="703" x2="294" y2="765" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- USE CASE 11: Send to Kitchen (y=840) — Captain + Kitchen -->
+  <ellipse cx="382" cy="840" rx="88" ry="22" fill="white" stroke="#000" stroke-width="1.3"/>
+  <text x="382" y="836" text-anchor="middle" font-size="10">Send to</text>
+  <text x="382" y="848" text-anchor="middle" font-size="10">Kitchen</text>
+  <line x1="101" y1="710" x2="294" y2="840" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+  <line x1="659" y1="510" x2="470" y2="840" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- USE CASE 12: Mark Order Status (y=915) — Kitchen -->
+  <ellipse cx="382" cy="915" rx="88" ry="22" fill="white" stroke="#000" stroke-width="1.3"/>
+  <text x="382" y="911" text-anchor="middle" font-size="10">Mark Order</text>
+  <text x="382" y="923" text-anchor="middle" font-size="10">Cooking / Ready</text>
+  <line x1="659" y1="515" x2="470" y2="915" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- USE CASE 13: View Menu (y=975) — Customer — wait too low, let me put some customer use cases pointing to existing ones -->
+  <!-- Customer → Register/Login already done -->
+  <!-- Customer → View Menu (new oval) -->
+  <ellipse cx="382" cy="975" rx="88" ry="22" fill="white" stroke="#000" stroke-width="1.3"/>
+  <text x="382" y="971" text-anchor="middle" font-size="10">View Menu /</text>
+  <text x="382" y="983" text-anchor="middle" font-size="10">Request Bill</text>
+  <line x1="659" y1="800" x2="470" y2="975" stroke="#000" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- ARROW MARKER -->
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#000"/>
+    </marker>
+  </defs>
+
+  <!-- caption -->
+  <text x="382" y="1010" text-anchor="middle" font-size="9" font-style="italic">Fig. 3.3.1 — Use Case Diagram (Mejwani Restaurant Management System)</text>
+</svg>
+</div>
+</body>
+</html>

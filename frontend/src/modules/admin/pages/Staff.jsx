@@ -308,7 +308,6 @@ export function StaffManagementContent() {
         const staffId = s._id || s.id;
         const staffReport = reports.find(r => Number(r.staffId || r._id) === Number(staffId)) || {};
         
-        // फक्त आजच्या तारखेचा खरा attendance रेकॉर्ड तपासा (s.status वापरू नका)
         let todayStatus = null;
         if (staffReport.records && staffReport.records[todayStr]) {
           todayStatus = String(staffReport.records[todayStr]).toLowerCase();
@@ -330,7 +329,7 @@ export function StaffManagementContent() {
           role: s.role || 'waiter',
           salary: Number(s.salary || 0),
           shift: s.shift || 'full-day',
-          status: todayStatus, // हजेरी लावलेली नसेल तर null राहील
+          status: todayStatus,
         };
       });
       setStaffList(normalizedStaff);
@@ -450,7 +449,6 @@ export function StaffManagementContent() {
     }
   };
 
-  // Mark Attendance
   const handleMarkAttendance = async (staffId, status, name) => {
     if (processingAttendanceId === staffId) return;
     const normalizedStatus = status.toLowerCase();
@@ -463,7 +461,6 @@ export function StaffManagementContent() {
       const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-      // Optimistic local update for staff status & report calendar
       setStaffList(prev => prev.map(s => (s._id === staffId || s.id === staffId) ? { ...s, status: normalizedStatus } : s));
       setReportData(prev => prev.map(r => {
         if (Number(r.staffId || r._id) === Number(staffId)) {
@@ -574,26 +571,26 @@ export function StaffManagementContent() {
   };
   
   return (
-    <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8 overflow-x-hidden">
+    <div className="w-full max-w-full mx-auto px-2 sm:px-4 py-4 space-y-6 overflow-x-hidden">
         
         {/* Top Header / View Toggles */}
-        <div className="flex flex-col gap-3 rounded-[1.5rem] border border-slate-100 bg-white p-2.5 shadow-sm dark:border-white/5 dark:bg-[#0c0c0c] md:flex-row md:items-center md:justify-between">
-          <div className="flex w-full gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-none md:w-auto">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.5rem] border border-slate-100 bg-white p-3 shadow-sm dark:border-white/5 dark:bg-[#0c0c0c]">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setViewMode('directory')}
-              className={`min-h-11 flex-none rounded-xl px-4 sm:px-5 py-2.5 text-[11px] font-black uppercase tracking-widest transition-all ${viewMode === 'directory' ? 'bg-[#ff6b00] text-white shadow-lg shadow-orange-500/20' : 'bg-transparent text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5'}`}
+              className={`min-h-10 rounded-xl px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-all ${viewMode === 'directory' ? 'bg-[#ff6b00] text-white shadow-lg shadow-orange-500/20' : 'bg-transparent text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5'}`}
             >
               Staff Directory
             </button>
             <button
               onClick={() => setViewMode('payroll')}
-              className={`min-h-11 flex-none rounded-xl px-4 sm:px-5 py-2.5 text-[11px] font-black uppercase tracking-widest transition-all ${viewMode === 'payroll' ? 'bg-[#ff6b00] text-white shadow-lg shadow-orange-500/20' : 'bg-transparent text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5'}`}
+              className={`min-h-10 rounded-xl px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-all ${viewMode === 'payroll' ? 'bg-[#ff6b00] text-white shadow-lg shadow-orange-500/20' : 'bg-transparent text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5'}`}
             >
               Payroll & Analytics
             </button>
             <button
               onClick={() => setViewMode('orders')}
-              className={`min-h-11 flex-none rounded-xl px-4 sm:px-5 py-2.5 text-[11px] font-black uppercase tracking-widest transition-all ${viewMode === 'orders' ? 'bg-[#ff6b00] text-white shadow-lg shadow-orange-500/20' : 'bg-transparent text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5'}`}
+              className={`min-h-10 rounded-xl px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-all ${viewMode === 'orders' ? 'bg-[#ff6b00] text-white shadow-lg shadow-orange-500/20' : 'bg-transparent text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5'}`}
             >
               Captain Performance
             </button>
@@ -602,7 +599,7 @@ export function StaffManagementContent() {
           {viewMode === 'directory' && (
             <button 
               onClick={handleAddClick}
-              className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#ff6b00] px-6 py-2.5 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] md:w-auto shrink-0"
+              className="flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#ff6b00] px-5 py-2 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] shrink-0"
             >
               <Plus className="w-4 h-4" /> Add Staff
             </button>
@@ -610,37 +607,37 @@ export function StaffManagementContent() {
         </div>
 
         {/* Dynamic Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5">
-          <div className="flex flex-col justify-between bg-white dark:bg-[#0c0c0c] p-5 sm:p-6 rounded-[2rem] border border-slate-100 dark:border-white/5 shadow-sm transition-all hover:scale-[1.01]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          <div className="flex flex-col justify-between bg-white dark:bg-[#0c0c0c] p-5 rounded-[2rem] border border-slate-100 dark:border-white/5 shadow-sm transition-all">
             <p className="text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-widest mb-2 flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5 shrink-0" /> Total Staff</p>
-            <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">{loading ? '...' : stats.total}</p>
+            <p className="text-2xl font-black text-slate-900 dark:text-white">{loading ? '...' : stats.total}</p>
           </div>
-          <div className="flex flex-col justify-between bg-white dark:bg-[#0c0c0c] p-5 sm:p-6 rounded-[2rem] border border-slate-100 dark:border-white/5 shadow-sm transition-all hover:scale-[1.01]">
+          <div className="flex flex-col justify-between bg-white dark:bg-[#0c0c0c] p-5 rounded-[2rem] border border-slate-100 dark:border-white/5 shadow-sm transition-all">
             <p className="text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-widest mb-2 flex items-center gap-1.5"><UserCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> Present Today</p>
-            <p className="text-2xl sm:text-3xl font-black text-emerald-500">{loading ? '...' : stats.present}</p>
+            <p className="text-2xl font-black text-emerald-500">{loading ? '...' : stats.present}</p>
           </div>
-          <div className="flex flex-col justify-between bg-white dark:bg-[#0c0c0c] p-5 sm:p-6 rounded-[2rem] border border-slate-100 dark:border-white/5 shadow-sm transition-all hover:scale-[1.01]">
+          <div className="flex flex-col justify-between bg-white dark:bg-[#0c0c0c] p-5 rounded-[2rem] border border-slate-100 dark:border-white/5 shadow-sm transition-all">
             <p className="text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-widest mb-2 flex items-center gap-1.5"><UserX className="w-3.5 h-3.5 text-rose-500 shrink-0" /> Absent Today</p>
-            <p className="text-2xl sm:text-3xl font-black text-rose-500">{loading ? '...' : stats.absent}</p>
+            <p className="text-2xl font-black text-rose-500">{loading ? '...' : stats.absent}</p>
           </div>
-          <div className="flex flex-col justify-between bg-white dark:bg-[#0c0c0c] p-5 sm:p-6 rounded-[2rem] border border-slate-100 dark:border-white/5 shadow-sm transition-all hover:scale-[1.01]">
+          <div className="flex flex-col justify-between bg-white dark:bg-[#0c0c0c] p-5 rounded-[2rem] border border-slate-100 dark:border-white/5 shadow-sm transition-all">
             <p className="text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-widest mb-2 flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5 text-blue-500 shrink-0" /> Avg Attendance</p>
             <div>
-              <p className="text-lg sm:text-xl font-black text-blue-500 leading-tight">{loading ? '...' : `P: ${monthlyTotals.present} | A: ${monthlyTotals.absent} | L: ${monthlyTotals.leave}`}</p>
+              <p className="text-base font-black text-blue-500 leading-tight">{loading ? '...' : `P: ${monthlyTotals.present} | A: ${monthlyTotals.absent} | L: ${monthlyTotals.leave}`}</p>
               <p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-400">{loading ? '' : `${monthlyTotals.effectivePresent} / ${monthlyTotals.totalDays || monthTotalDays} Days`}</p>
             </div>
           </div>
-          <div className="sm:col-span-2 md:col-span-1 flex flex-col justify-between bg-white dark:bg-[#0c0c0c] p-5 sm:p-6 rounded-[2rem] border border-slate-100 dark:border-white/5 shadow-sm transition-all hover:scale-[1.01]">
+          <div className="flex flex-col justify-between bg-white dark:bg-[#0c0c0c] p-5 rounded-[2rem] border border-slate-100 dark:border-white/5 shadow-sm transition-all">
             <p className="text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-widest mb-2 flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5 text-amber-500 shrink-0" /> Estimated Salary</p>
             <div>
-              <p className="text-2xl sm:text-3xl font-black text-amber-500 truncate">INR {loading ? '...' : totalPayroll.toLocaleString()}</p>
+              <p className="text-xl xl:text-2xl font-black text-amber-500 truncate">INR {loading ? '...' : totalPayroll.toLocaleString()}</p>
               <p className="mt-1 text-[10px] font-bold text-slate-400">Based on current attendance</p>
             </div>
           </div>
         </div>
 
         {error && (
-          <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center gap-4 animate-in fade-in duration-300">
+          <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <AlertTriangle className="w-6 h-6 flex-shrink-0 animate-pulse" />
             <div className="text-xs font-bold leading-normal flex-1">{error}</div>
             <button onClick={() => fetchData()} className="w-full sm:w-auto px-4 py-2 bg-rose-500 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-rose-600 transition-colors">Retry Connection</button>
@@ -655,24 +652,24 @@ export function StaffManagementContent() {
         ) : viewMode === 'directory' ? (
           <div className="space-y-6">
             {/* Search and Role Filter */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div className="relative w-full lg:max-w-sm">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+              <div className="relative w-full xl:max-w-xs">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input 
                   type="text"
-                  placeholder="Search staff by name, role, phone..."
+                  placeholder="Search staff..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3.5 bg-white dark:bg-[#0c0c0c] border border-slate-200 dark:border-white/5 rounded-2xl text-xs font-bold focus:outline-none focus:border-[#ff6b00] transition-all text-slate-800 dark:text-white"
+                  className="w-full pl-11 pr-4 py-3 bg-white dark:bg-[#0c0c0c] border border-slate-200 dark:border-white/5 rounded-2xl text-xs font-bold focus:outline-none focus:border-[#ff6b00] transition-all text-slate-800 dark:text-white"
                 />
               </div>
 
-              <div className="flex w-full lg:w-auto bg-white dark:bg-[#0c0c0c] p-1.5 border border-slate-200 dark:border-white/5 rounded-2xl overflow-x-auto scrollbar-none gap-1">
+              <div className="flex flex-wrap bg-white dark:bg-[#0c0c0c] p-1.5 border border-slate-200 dark:border-white/5 rounded-2xl gap-1">
                 {roles.map(role => (
                   <button
                     key={role}
                     onClick={() => setActiveRole(role)}
-                    className={`px-4 sm:px-5 py-2.5 text-[10px] uppercase tracking-widest font-black rounded-xl transition-all whitespace-nowrap shrink-0 ${
+                    className={`px-3.5 py-2 text-[10px] uppercase tracking-widest font-black rounded-xl transition-all whitespace-nowrap ${
                       activeRole === role 
                         ? 'bg-[#ff6b00] text-white shadow-sm' 
                         : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
@@ -690,7 +687,7 @@ export function StaffManagementContent() {
                 <p className="text-sm font-black uppercase tracking-wider text-slate-500 dark:text-white">No staff members found</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-stretch">
                 {filteredStaff.map((member) => {
                   const rData = getReportForStaff(member._id);
                   const calendarDays = getAttendanceCalendar(rData, member.status);
@@ -698,14 +695,13 @@ export function StaffManagementContent() {
                   const currentStatus = member.status ? member.status.toLowerCase() : null;
 
                   return (
-                    <div key={member._id} className="relative flex flex-col justify-between rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all duration-300 hover:border-[#ff6b00]/30 hover:shadow-lg dark:border-white/5 dark:bg-[#0d0d0d] h-full">
+                    <div key={member._id} className="relative flex flex-col justify-between rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:border-[#ff6b00]/30 hover:shadow-lg dark:border-white/5 dark:bg-[#0d0d0d] h-full">
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                         
-                        {/* Avatar & Status Badge */}
                         <div className="flex items-center justify-between sm:block w-full sm:w-auto">
                           <div className="relative shrink-0">
-                            <div className="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-[1.5rem] bg-[#ff6b00]/10">
-                              <span className="text-2xl sm:text-3xl font-black text-[#ff6b00]">{member.fullName.charAt(0)}</span>
+                            <div className="flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-[#ff6b00]/10">
+                              <span className="text-2xl font-black text-[#ff6b00]">{member.fullName.charAt(0)}</span>
                             </div>
                             {currentStatus && (
                               <div className={`absolute -bottom-1 -right-1 w-7 h-7 rounded-xl border-4 border-white dark:border-[#0d0d0d] flex items-center justify-center
@@ -722,7 +718,6 @@ export function StaffManagementContent() {
                             )}
                           </div>
 
-                          {/* Mobile Edit/Delete buttons */}
                           <div className="flex sm:hidden shrink-0 gap-1.5">
                             <button onClick={() => handleEditClick(member)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 text-slate-400 transition-all hover:text-blue-500 dark:bg-white/5">
                               <Edit2 className="w-3.5 h-3.5" />
@@ -736,14 +731,13 @@ export function StaffManagementContent() {
                         <div className="w-full min-w-0 flex-1">
                           <div className="mb-4 flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <h4 className="break-words text-lg sm:text-xl font-black tracking-tight text-slate-900 dark:text-white">{member.fullName}</h4>
+                              <h4 className="break-normal text-lg font-black tracking-tight text-slate-900 dark:text-white">{member.fullName}</h4>
                               <div className="mt-2 flex flex-wrap items-center gap-2">
                                 <span className="rounded-full bg-[#ff6b00]/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[#ff6b00]">{formatRole(member.role)}</span>
                                 <span className="text-slate-400 dark:text-slate-500 text-[9px] font-black uppercase tracking-widest">{member.shift} SHIFT</span>
                               </div>
                             </div>
                             
-                            {/* Desktop Edit/Delete buttons */}
                             <div className="hidden sm:flex shrink-0 gap-1.5">
                               <button onClick={() => handleEditClick(member)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 text-slate-400 transition-all hover:text-blue-500 dark:bg-white/5">
                                 <Edit2 className="w-3.5 h-3.5" />
@@ -778,7 +772,7 @@ export function StaffManagementContent() {
                               <CalendarDays className="h-4 w-4 text-[#ff6b00] shrink-0" />
                               <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-white/50">Monthly Attendance History</p>
                             </div>
-                            <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+                            <div className="grid grid-cols-7 gap-1">
                               {calendarDays.map(day => (
                                 <div
                                   key={day.day}
@@ -803,7 +797,7 @@ export function StaffManagementContent() {
                         <button
                           disabled={isProcessing}
                           onClick={() => handleMarkAttendance(member._id, 'present', member.fullName)}
-                          className={`min-h-11 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+                          className={`min-h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
                             currentStatus === 'present'
                               ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30'
                               : 'bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-white/50 hover:bg-emerald-500/10 hover:text-emerald-500'
@@ -814,7 +808,7 @@ export function StaffManagementContent() {
                         <button
                           disabled={isProcessing}
                           onClick={() => handleMarkAttendance(member._id, 'absent', member.fullName)}
-                          className={`min-h-11 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+                          className={`min-h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
                             currentStatus === 'absent'
                               ? 'bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/30'
                               : 'bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-white/50 hover:bg-rose-500/10 hover:text-rose-500'
@@ -825,7 +819,7 @@ export function StaffManagementContent() {
                         <button
                           disabled={isProcessing}
                           onClick={() => handleMarkAttendance(member._id, 'leave', member.fullName)}
-                          className={`min-h-11 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+                          className={`min-h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
                             currentStatus === 'leave'
                               ? 'bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30'
                               : 'bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-white/50 hover:bg-amber-500/10 hover:text-amber-500'
@@ -842,13 +836,13 @@ export function StaffManagementContent() {
           </div>
         ) : viewMode === 'payroll' ? (
           <div className="space-y-6">
-            <div className="bg-white dark:bg-[#0d0d0d] border border-slate-200 dark:border-white/5 rounded-[2rem] sm:rounded-[2.5rem] overflow-hidden shadow-xl">
-              <div className="flex flex-col gap-4 border-b border-slate-100 bg-slate-50/50 p-5 sm:p-6 dark:border-white/5 dark:bg-white/2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="bg-white dark:bg-[#0d0d0d] border border-slate-200 dark:border-white/5 rounded-[2.5rem] overflow-hidden shadow-xl">
+              <div className="flex flex-col gap-4 border-b border-slate-100 bg-slate-50/50 p-5 dark:border-white/5 dark:bg-white/2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">Monthly Payroll & Attendance</h3>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Monthly Payroll & Attendance</h3>
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Calculated based on current attendance</p>
                 </div>
-                <button className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-white/10 rounded-xl text-xs font-bold text-slate-600 dark:text-white hover:bg-slate-200 dark:hover:bg-white/20 transition-all uppercase tracking-wider w-full sm:w-auto">
+                <button className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-white/10 rounded-xl text-xs font-bold text-slate-600 dark:text-white hover:bg-slate-200 transition-all uppercase tracking-wider w-full sm:w-auto">
                   <FileText className="w-4 h-4" /> Export CSV
                 </button>
               </div>
@@ -857,11 +851,11 @@ export function StaffManagementContent() {
                 <table className="w-full min-w-[700px] text-left border-collapse">
                   <thead>
                     <tr className="border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-black/20 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                      <th className="p-4 sm:p-5 pl-6 sm:pl-8">Staff Member</th>
-                      <th className="p-4 sm:p-5">P / A / L</th>
-                      <th className="p-4 sm:p-5">Base Salary</th>
-                      <th className="p-4 sm:p-5">Estimated Salary</th>
-                      <th className="p-4 sm:p-5 pr-6 sm:pr-8">Attd. %</th>
+                      <th className="p-4 pl-8">Staff Member</th>
+                      <th className="p-4">P / A / L</th>
+                      <th className="p-4">Base Salary</th>
+                      <th className="p-4">Estimated Salary</th>
+                      <th className="p-4 pr-8">Attd. %</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-white/5">
@@ -873,7 +867,7 @@ export function StaffManagementContent() {
                       
                       return (
                         <tr key={sal.staffId || sal._id} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
-                          <td className="p-4 sm:p-5 pl-6 sm:pl-8">
+                          <td className="p-4 pl-8">
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 rounded-full bg-[#ff6b00]/10 flex items-center justify-center text-[#ff6b00] font-black text-sm shrink-0">
                                 {sal.fullName.charAt(0)}
@@ -884,7 +878,7 @@ export function StaffManagementContent() {
                               </div>
                             </div>
                           </td>
-                          <td className="p-4 sm:p-5">
+                          <td className="p-4">
                             <div className="flex gap-1.5 text-xs font-black">
                               <span className="text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded">P: {presentCount}</span>
                               <span className="text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded">A: {rep.absentDays || rep.absent_days || 0}</span>
@@ -892,12 +886,12 @@ export function StaffManagementContent() {
                             </div>
                             <p className="mt-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">{presentCount} / {totalDaysCount} Days Present</p>
                           </td>
-                          <td className="p-4 sm:p-5 font-black text-slate-600 dark:text-white/70 whitespace-nowrap">INR {(sal.baseSalary || 0).toLocaleString()}</td>
-                          <td className="p-4 sm:p-5 font-black text-emerald-600 dark:text-emerald-400 text-base whitespace-nowrap">
+                          <td className="p-4 font-black text-slate-600 dark:text-white/70 whitespace-nowrap">INR {(sal.baseSalary || 0).toLocaleString()}</td>
+                          <td className="p-4 font-black text-emerald-600 dark:text-emerald-400 text-base whitespace-nowrap">
                             INR {(sal.payableSalary || sal.finalSalary || 0).toLocaleString()}
                             <p className="mt-1 text-[10px] font-bold text-slate-400">Based on attendance</p>
                           </td>
-                          <td className="p-4 sm:p-5 pr-6 sm:pr-8">
+                          <td className="p-4 pr-8">
                             <div className="flex items-center gap-3">
                               <span className="font-black text-sm w-10">{pct}%</span>
                               <div className="w-24 h-2 bg-slate-100 dark:bg-white/10 rounded-full overflow-hidden shrink-0">
@@ -926,7 +920,7 @@ export function StaffManagementContent() {
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 p-5 sm:p-6 bg-white dark:bg-[#0c0c0c] border border-slate-200 dark:border-white/5 rounded-[2rem] shadow-sm">
+            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 p-5 bg-white dark:bg-[#0c0c0c] border border-slate-200 dark:border-white/5 rounded-[2rem] shadow-sm">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full lg:w-auto items-end">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-widest ml-1">From Date</label>
@@ -975,32 +969,32 @@ export function StaffManagementContent() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-6">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
-                  <div className="bg-white dark:bg-[#0c0c0c] p-5 sm:p-6 rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="bg-white dark:bg-[#0c0c0c] p-5 rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-widest mb-1.5">Total Sales Revenue</p>
-                    <p className="text-2xl sm:text-3xl font-black text-[#ff6b00]">INR {performanceData.reduce((sum, item) => sum + item.totalSales, 0).toLocaleString()}</p>
+                    <p className="text-2xl font-black text-[#ff6b00]">INR {performanceData.reduce((sum, item) => sum + item.totalSales, 0).toLocaleString()}</p>
                   </div>
-                  <div className="bg-white dark:bg-[#0c0c0c] p-5 sm:p-6 rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm">
+                  <div className="bg-white dark:bg-[#0c0c0c] p-5 rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-widest mb-1.5">Total Orders Handled</p>
-                    <p className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white">{performanceData.reduce((sum, item) => sum + item.totalOrdersCount, 0).toLocaleString()}</p>
+                    <p className="text-2xl font-black text-slate-800 dark:text-white">{performanceData.reduce((sum, item) => sum + item.totalOrdersCount, 0).toLocaleString()}</p>
                   </div>
-                  <div className="bg-white dark:bg-[#0c0c0c] p-5 sm:p-6 rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm">
+                  <div className="bg-white dark:bg-[#0c0c0c] p-5 rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-widest mb-1.5">Top Order Taker</p>
-                    <p className="text-xl sm:text-2xl font-black text-emerald-500 truncate">{performanceData[0]?.fullName || 'N/A'}</p>
+                    <p className="text-xl font-black text-emerald-500 truncate">{performanceData[0]?.fullName || 'N/A'}</p>
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-[#0d0d0d] border border-slate-200 dark:border-white/5 rounded-[2rem] sm:rounded-[2.5rem] overflow-hidden shadow-xl">
+                <div className="bg-white dark:bg-[#0d0d0d] border border-slate-200 dark:border-white/5 rounded-[2.5rem] overflow-hidden shadow-xl">
                   <div className="overflow-x-auto w-full">
                     <table className="w-full min-w-[700px] text-left border-collapse">
                       <thead>
                         <tr className="border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-black/20 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                          <th className="p-4 sm:p-5 pl-6 sm:pl-8">Rank</th>
-                          <th className="p-4 sm:p-5">Name</th>
-                          <th className="p-4 sm:p-5">Role/Type</th>
-                          <th className="p-4 sm:p-5">Total Orders</th>
-                          <th className="p-4 sm:p-5">Performance</th>
-                          <th className="p-4 sm:p-5 pr-6 sm:pr-8 text-right">Total Sales</th>
+                          <th className="p-4 pl-8">Rank</th>
+                          <th className="p-4">Name</th>
+                          <th className="p-4">Role/Type</th>
+                          <th className="p-4">Total Orders</th>
+                          <th className="p-4">Performance</th>
+                          <th className="p-4 pr-8 text-right">Total Sales</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-white/5">
@@ -1010,8 +1004,8 @@ export function StaffManagementContent() {
                             onClick={() => setSelectedCaptain(cap)}
                             className="hover:bg-slate-50/70 dark:hover:bg-white/[0.02] cursor-pointer transition-colors"
                           >
-                            <td className="p-4 sm:p-5 pl-6 sm:pl-8 font-black text-slate-500">#{index + 1}</td>
-                            <td className="p-4 sm:p-5">
+                            <td className="p-4 pl-8 font-black text-slate-500">#{index + 1}</td>
+                            <td className="p-4">
                               <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-[#ff6b00]/10 flex items-center justify-center text-[#ff6b00] font-black text-sm shrink-0">
                                   {cap.fullName.charAt(0)}
@@ -1022,7 +1016,7 @@ export function StaffManagementContent() {
                                 </div>
                               </div>
                             </td>
-                            <td className="p-4 sm:p-5 text-xs font-black uppercase text-slate-500">
+                            <td className="p-4 text-xs font-black uppercase text-slate-500">
                               {cap.id === 0 ? (
                                 <span className="bg-slate-100 dark:bg-white/5 px-2.5 py-1 rounded-md text-slate-600 dark:text-slate-400">COUNTER</span>
                               ) : cap.id === null ? (
@@ -1031,8 +1025,8 @@ export function StaffManagementContent() {
                                 <span className="bg-[#ff6b00]/10 px-2.5 py-1 rounded-md text-[#ff6b00]">CAPTAIN</span>
                               )}
                             </td>
-                            <td className="p-4 sm:p-5 font-black text-slate-800 dark:text-white whitespace-nowrap">{cap.totalOrdersCount} Orders</td>
-                            <td className="p-4 sm:p-5">
+                            <td className="p-4 font-black text-slate-800 dark:text-white whitespace-nowrap">{cap.totalOrdersCount} Orders</td>
+                            <td className="p-4">
                               {cap.id === 0 ? (
                                 <span className="text-slate-400 text-xs font-bold">N/A</span>
                               ) : (
@@ -1042,7 +1036,7 @@ export function StaffManagementContent() {
                                 </div>
                               )}
                             </td>
-                            <td className="p-4 sm:p-5 pr-6 sm:pr-8 text-right font-black text-[#ff6b00] text-base whitespace-nowrap">
+                            <td className="p-4 pr-8 text-right font-black text-[#ff6b00] text-base whitespace-nowrap">
                               INR {cap.totalSales.toLocaleString()}
                             </td>
                           </tr>
@@ -1060,10 +1054,10 @@ export function StaffManagementContent() {
         {selectedCaptain && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedCaptain(null)} />
-            <div className="relative w-full max-w-4xl bg-white dark:bg-[#0c0c0c] border border-slate-200 dark:border-white/10 rounded-[2rem] sm:rounded-[3rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-              <div className="p-5 sm:p-8 border-b border-slate-100 dark:border-white/5 flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-slate-50 dark:bg-[#0f0f0f]">
+            <div className="relative w-full max-w-4xl bg-white dark:bg-[#0c0c0c] border border-slate-200 dark:border-white/10 rounded-[3rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+              <div className="p-6 border-b border-slate-100 dark:border-white/5 flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-slate-50 dark:bg-[#0f0f0f]">
                 <div>
-                  <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{selectedCaptain.fullName}'s Order History</h3>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white">{selectedCaptain.fullName}'s Order History</h3>
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
                     Period: {startDate} to {endDate} | Sales: INR {selectedCaptain.totalSales.toLocaleString()}
                   </p>
@@ -1081,7 +1075,7 @@ export function StaffManagementContent() {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-5 sm:p-8">
+              <div className="flex-1 overflow-y-auto p-6">
                 {selectedCaptain.orders.length === 0 ? (
                   <div className="h-64 flex flex-col items-center justify-center text-center opacity-40">
                     <FileText className="w-12 h-12 text-slate-400 mb-4" />
@@ -1132,25 +1126,25 @@ export function StaffManagementContent() {
         {isModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !savingStaff && setIsModalOpen(false)} />
-            <div className="relative w-full max-w-xl bg-white dark:bg-[#0c0c0c] border border-slate-200 dark:border-white/10 rounded-[2rem] sm:rounded-[3rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-              <div className="p-6 sm:p-8 border-b border-slate-100 dark:border-white/5 flex justify-between items-center bg-slate-50 dark:bg-[#0f0f0f]">
+            <div className="relative w-full max-w-xl bg-white dark:bg-[#0c0c0c] border border-slate-200 dark:border-white/10 rounded-[3rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+              <div className="p-6 border-b border-slate-100 dark:border-white/5 flex justify-between items-center bg-slate-50 dark:bg-[#0f0f0f]">
                 <div>
-                  <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{editingStaff ? 'Edit Staff Profile' : 'New Staff Registration'}</h3>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white">{editingStaff ? 'Edit Staff Profile' : 'New Staff Registration'}</h3>
                 </div>
                 <button disabled={savingStaff} onClick={() => setIsModalOpen(false)} className="p-2 bg-slate-100 dark:bg-white/10 rounded-full hover:bg-slate-200 transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-50">
                   <X className="w-4 h-4 text-slate-500 dark:text-white" />
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-5">
+              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
-                    <input type="text" name="fullName" required value={formData.fullName} onChange={handleInputChange} placeholder="e.g. Amit Patil" className="w-full px-4 sm:px-5 py-3.5 bg-slate-50 dark:bg-[#0f0f0f] border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-800 dark:text-white outline-none focus:border-[#ff6b00]" />
+                    <input type="text" name="fullName" required value={formData.fullName} onChange={handleInputChange} placeholder="e.g. Amit Patil" className="w-full px-4 py-3.5 bg-slate-50 dark:bg-[#0f0f0f] border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-800 dark:text-white outline-none focus:border-[#ff6b00]" />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Role</label>
-                    <select name="role" value={formData.role} onChange={handleInputChange} className="w-full px-4 sm:px-5 py-3.5 bg-slate-50 dark:bg-[#0f0f0f] border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-800 dark:text-white outline-none focus:border-[#ff6b00]">
+                    <select name="role" value={formData.role} onChange={handleInputChange} className="w-full px-4 py-3.5 bg-slate-50 dark:bg-[#0f0f0f] border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-800 dark:text-white outline-none focus:border-[#ff6b00]">
                       <option value="waiter">Waiter</option>
                       <option value="captain">Captain</option>
                       <option value="chef">Chef</option>
@@ -1164,22 +1158,22 @@ export function StaffManagementContent() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
-                    <input type="text" name="phone" required value={formData.phone} onChange={handleInputChange} placeholder="+91..." className="w-full px-4 sm:px-5 py-3.5 bg-slate-50 dark:bg-[#0f0f0f] border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-800 dark:text-white outline-none focus:border-[#ff6b00]" />
+                    <input type="text" name="phone" required value={formData.phone} onChange={handleInputChange} placeholder="+91..." className="w-full px-4 py-3.5 bg-slate-50 dark:bg-[#0f0f0f] border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-800 dark:text-white outline-none focus:border-[#ff6b00]" />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email</label>
-                    <input type="email" name="email" value={formData.email} onChange={handleInputChange} placeholder="@" className="w-full px-4 sm:px-5 py-3.5 bg-slate-50 dark:bg-[#0f0f0f] border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-800 dark:text-white outline-none focus:border-[#ff6b00]" />
+                    <input type="email" name="email" value={formData.email} onChange={handleInputChange} placeholder="@" className="w-full px-4 py-3.5 bg-slate-50 dark:bg-[#0f0f0f] border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-800 dark:text-white outline-none focus:border-[#ff6b00]" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Salary (INR)</label>
-                    <input type="number" name="salary" required value={formData.salary} onChange={handleInputChange} className="w-full px-4 sm:px-5 py-3.5 bg-slate-50 dark:bg-[#0f0f0f] border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-800 dark:text-white outline-none focus:border-[#ff6b00]" />
+                    <input type="number" name="salary" required value={formData.salary} onChange={handleInputChange} className="w-full px-4 py-3.5 bg-slate-50 dark:bg-[#0f0f0f] border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-800 dark:text-white outline-none focus:border-[#ff6b00]" />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Shift</label>
-                    <select name="shift" value={formData.shift} onChange={handleInputChange} className="w-full px-4 sm:px-5 py-3.5 bg-slate-50 dark:bg-[#0f0f0f] border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-800 dark:text-white outline-none focus:border-[#ff6b00]">
+                    <select name="shift" value={formData.shift} onChange={handleInputChange} className="w-full px-4 py-3.5 bg-slate-50 dark:bg-[#0f0f0f] border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-800 dark:text-white outline-none focus:border-[#ff6b00]">
                       <option value="morning">Morning</option>
                       <option value="evening">Evening</option>
                       <option value="night">Night</option>
@@ -1188,8 +1182,8 @@ export function StaffManagementContent() {
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-4 border-t border-slate-100 dark:border-white/5">
-                  <button type="button" disabled={savingStaff} onClick={() => setIsModalOpen(false)} className="w-full sm:flex-1 px-6 py-4 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/60 rounded-2xl font-black text-xs hover:bg-slate-200 dark:hover:bg-white/10 transition-all uppercase disabled:cursor-not-allowed disabled:opacity-50">
+                <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-100 dark:border-white/5">
+                  <button type="button" disabled={savingStaff} onClick={() => setIsModalOpen(false)} className="w-full sm:flex-1 px-6 py-4 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/60 rounded-2xl font-black text-xs hover:bg-slate-200 transition-all uppercase disabled:cursor-not-allowed disabled:opacity-50">
                     Cancel
                   </button>
                   <button type="submit" disabled={savingStaff} className="w-full sm:flex-1 px-6 py-4 bg-[#ff6b00] text-white rounded-2xl font-black text-xs shadow-xl shadow-orange-500/20 hover:scale-[1.02] transition-all uppercase disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:scale-100">
@@ -1209,7 +1203,7 @@ export function StaffManagementContent() {
         {/* Real-time Toast Notifications */}
         <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[200] flex flex-col gap-3 max-w-[calc(100vw-2rem)] sm:max-w-sm pointer-events-none">
           {toasts.map(toast => (
-            <div key={toast.id} className={`p-4 sm:p-5 text-white rounded-[1.5rem] sm:rounded-[2rem] shadow-2xl flex items-center gap-3.5 border border-white/20 animate-in fade-in slide-in-from-bottom-5 duration-300 pointer-events-auto ${toast.type === 'error' ? 'bg-rose-500 shadow-rose-500/20' : 'bg-[#ff6b00] shadow-orange-500/20'}`}>
+            <div key={toast.id} className={`p-4 text-white rounded-[2rem] shadow-2xl flex items-center gap-3.5 border border-white/20 animate-in fade-in slide-in-from-bottom-5 duration-300 pointer-events-auto ${toast.type === 'error' ? 'bg-rose-500 shadow-rose-500/20' : 'bg-[#ff6b00] shadow-orange-500/20'}`}>
               <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
                 {toast.type === 'error' ? <AlertCircle className="w-4 h-4 text-white" /> : <CheckCircle className="w-4 h-4 text-white" />}
               </div>

@@ -1091,6 +1091,7 @@ export default function OrdersPage() {
   }, [orders, selectedTableLive]);
 
   const [checkoutOrder, setCheckoutOrder] = useState(null);
+  const [eBillModalData, setEBillModalData] = useState(null);
   const [menuViewMode, setMenuViewMode] = useState('table');
 
   const billingTotals = useMemo(() => {
@@ -1139,7 +1140,9 @@ export default function OrdersPage() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        if (isAddingItems) {
+        if (eBillModalData) {
+          setEBillModalData(null);
+        } else if (isAddingItems) {
           closeAddMoreItems();
         } else if (isCreatingDirectOrder) {
           closeDirectOrder();
@@ -1149,13 +1152,13 @@ export default function OrdersPage() {
         }
       }
     };
-    if (selectedTable) {
+    if (selectedTable || eBillModalData) {
       window.addEventListener('keydown', handleKeyDown);
     }
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedTable, isAddingItems, isCreatingDirectOrder]);
+  }, [selectedTable, eBillModalData, isAddingItems, isCreatingDirectOrder]);
 
   const tablesByArea = useMemo(() => {
     return tables.reduce((acc, table) => {
@@ -1226,7 +1229,49 @@ export default function OrdersPage() {
     }
   };
 
- const handleCancelBill = async (orderId) => {
+  const handleSaveAndEBill = async (table, order) => {
+    if (!table || !order) return;
+
+    const dateStr = formatDateDDMMYYYY(new Date());
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    const itemsTotal = (order.items || []).reduce(
+      (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0),
+      0
+    );
+    const subtotalValue = Number(order.subtotal) > 0 ? Number(order.subtotal) : itemsTotal;
+    const cgstValue = Number(order.cgst) > 0 ? Number(order.cgst) : (subtotalValue * cgstRate) / 100;
+    const sgstValue = Number(order.sgst) > 0 ? Number(order.sgst) : (subtotalValue * sgstRate) / 100;
+    const serviceChargeValue = (subtotalValue * serviceChargeRate) / 100;
+    const grandTotalValue = subtotalValue + cgstValue + sgstValue + serviceChargeValue;
+
+    const billSnapshot = {
+      hotelName: systemSettings?.branding?.name || 'MEJWANI',
+      address: systemSettings?.branding?.address || '',
+      phone: systemSettings?.branding?.phone || '',
+      gstNumber: systemSettings?.billing?.gstNumber || '',
+      tableName: table.table_name,
+      invoiceId: `INV-${order.id}`,
+      dateTime: `${dateStr} ${timeStr}`,
+      paymentMode: selectedPaymentMode || 'CASH',
+      items: order.items || [],
+      subtotal: subtotalValue,
+      cgst: cgstValue,
+      sgst: sgstValue,
+      serviceCharge: serviceChargeValue,
+      grandTotal: grandTotalValue
+    };
+
+    if (order.status !== 'COMPLETED') {
+      await handleCompletePayment(order.id, false);
+    }
+
+    setSelectedTable(null);
+    setEBillModalData(billSnapshot);
+    toast.success('✅ Payment settled & E-Bill generated!');
+  };
+
+  const handleCancelBill = async (orderId) => {
     if (!orderId) return;
 
     try {
@@ -1260,11 +1305,108 @@ export default function OrdersPage() {
     }
   };
 
-  const handleThermalPrintDirect = async (billData) => {
-    if (printerConfig && !printerConfig.bill) {
-      showPrinterErrorToast('Bill Printer is not configured.', 'bill-print-error');
+  const openBrowserPrintReceipt = (billData) => {
+    const printWindow = window.open('', '_blank', 'width=400,height=650');
+    if (!printWindow) {
+      window.print();
       return;
     }
+
+    const itemsRows = (billData.items || [])
+      .map(
+        (item) => `
+        <tr>
+          <td style="padding: 4px 0; text-align: left;">${item.name}</td>
+          <td style="padding: 4px 0; text-align: center;">${item.quantity}</td>
+          <td style="padding: 4px 0; text-align: right;">${Number(item.price).toFixed(2)}</td>
+          <td style="padding: 4px 0; text-align: right;">${(Number(item.price) * Number(item.quantity)).toFixed(2)}</td>
+        </tr>`
+      )
+      .join('');
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Bill Receipt - ${billData.orderId}</title>
+          <style>
+            body {
+              font-family: 'Courier New', monospace;
+              width: 300px;
+              margin: 0 auto;
+              padding: 15px;
+              color: #000;
+              font-size: 12px;
+            }
+            .center { text-align: center; }
+            .bold { font-weight: bold; }
+            .divider { border-top: 1px dashed #000; margin: 8px 0; }
+            table { width: 100%; border-collapse: collapse; font-size: 11px; }
+            th { border-bottom: 1px dashed #000; padding-bottom: 4px; }
+            .totals td { padding: 3px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="center bold" style="font-size: 16px;">${billData.hotelName || 'MEJWANI'}</div>
+          ${billData.address ? `<div class="center" style="font-size: 11px;">${billData.address}</div>` : ''}
+          ${billData.phone ? `<div class="center" style="font-size: 11px;">Ph: ${billData.phone}</div>` : ''}
+          ${billData.gstNumber ? `<div class="center" style="font-size: 11px;">GSTIN: ${billData.gstNumber}</div>` : ''}
+          
+          <div class="divider"></div>
+          <div><strong>Bill No:</strong> ${billData.orderId}</div>
+          <div><strong>Table:</strong> ${billData.tableNumber}</div>
+          <div><strong>Date:</strong> ${billData.dateTime}</div>
+          <div class="divider"></div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align: left;">Item</th>
+                <th style="text-align: center;">Qty</th>
+                <th style="text-align: right;">Rate</th>
+                <th style="text-align: right;">Amt</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsRows}
+            </tbody>
+          </table>
+
+          <div class="divider"></div>
+          <table class="totals">
+            <tr>
+              <td>Subtotal:</td>
+              <td style="text-align: right;">${billData.currencySymbol || '₹'}${Number(billData.subtotal).toFixed(2)}</td>
+            </tr>
+            ${billData.cgst > 0 ? `<tr><td>CGST (${billData.cgstRate}%):</td><td style="text-align: right;">${billData.currencySymbol || '₹'}${Number(billData.cgst).toFixed(2)}</td></tr>` : ''}
+            ${billData.sgst > 0 ? `<tr><td>SGST (${billData.sgstRate}%):</td><td style="text-align: right;">${billData.currencySymbol || '₹'}${Number(billData.sgst).toFixed(2)}</td></tr>` : ''}
+            ${billData.serviceCharge > 0 ? `<tr><td>Service Charge (${billData.serviceChargeRate}%):</td><td style="text-align: right;">${billData.currencySymbol || '₹'}${Number(billData.serviceCharge).toFixed(2)}</td></tr>` : ''}
+            <tr class="bold" style="font-size: 14px; border-top: 1px dashed #000;">
+              <td style="padding-top: 6px;">GRAND TOTAL:</td>
+              <td style="padding-top: 6px; text-align: right;">${billData.currencySymbol || '₹'}${Number(billData.grandTotal).toFixed(2)}</td>
+            </tr>
+          </table>
+
+          <div class="divider"></div>
+          <div class="center" style="margin-top: 10px;">Thank You! Visit Again!</div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              window.onafterprint = function() { window.close(); };
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const handleThermalPrintDirect = async (billData) => {
+    if (!printerConfig || !printerConfig.bill) {
+      openBrowserPrintReceipt(billData);
+      return;
+    }
+
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
       const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
@@ -1278,7 +1420,7 @@ export default function OrdersPage() {
       const data = await response.json();
       if (!data.success) {
         if (data.code === 'PRINTER_NOT_CONFIGURED' || data.code === 'PRINTER_OFFLINE') {
-          showPrinterErrorToast(data.message, 'bill-print-error');
+          openBrowserPrintReceipt(billData);
           return;
         }
         throw new Error(data.message || 'Direct print failed');
@@ -1304,14 +1446,16 @@ export default function OrdersPage() {
             return;
           }
         } catch (localErr) {
-          console.log('[DEBUG] Local print failure:', jobId, localErr.message);
+          console.log('[DEBUG] Local print failure, falling back to browser print:', jobId, localErr.message);
+          openBrowserPrintReceipt(billData);
+          return;
         }
 
         fetch('http://127.0.0.1:9111/trigger-poll').catch(() => {});
       }
     } catch (err) {
-      console.error('Direct print error', err);
-      toast.error('❌ Failed to process printing request.');
+      console.error('Direct print error, opening browser print fallback:', err);
+      openBrowserPrintReceipt(billData);
     }
   };
 
@@ -2368,9 +2512,8 @@ export default function OrdersPage() {
                                 Save & Print
                               </button>
                               <button
-                                disabled={checkoutOrder.status === 'COMPLETED'}
-                                onClick={() => handleCompletePayment(checkoutOrder.id, false)}
-                                className="flex-1 px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                onClick={() => handleSaveAndEBill(selectedTableLive, checkoutOrder)}
+                                className="flex-1 px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                               >
                                 Save & EBill
                               </button>
@@ -2447,6 +2590,114 @@ export default function OrdersPage() {
           )}
         </div>
       </div>
+
+      {/* Digital E-Bill Receipt Modal */}
+      {eBillModalData && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm">
+          <div className="relative w-full max-w-md bg-white dark:bg-[#111] border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-emerald-600 text-white p-5 text-center relative">
+              <button
+                onClick={() => setEBillModalData(null)}
+                className="absolute right-4 top-4 p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <span className="inline-block px-3 py-1 rounded-full bg-white/20 text-[10px] font-black uppercase tracking-widest mb-1">
+                Paid · {eBillModalData.paymentMode}
+              </span>
+              <h3 className="text-xl font-black tracking-tight">{eBillModalData.hotelName}</h3>
+              {eBillModalData.address && (
+                <p className="text-[11px] opacity-90 mt-0.5">{eBillModalData.address}</p>
+              )}
+              {eBillModalData.gstNumber && (
+                <p className="text-[10px] font-mono opacity-80 mt-0.5">GSTIN: {eBillModalData.gstNumber}</p>
+              )}
+            </div>
+
+            <div className="p-6 space-y-4 text-xs">
+              <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-3 text-slate-600 dark:text-slate-300 font-bold">
+                <div>
+                  <span className="text-[10px] text-slate-400 block uppercase">Invoice</span>
+                  <span className="text-slate-900 dark:text-white font-black">{eBillModalData.invoiceId}</span>
+                </div>
+                <div className="text-center">
+                  <span className="text-[10px] text-slate-400 block uppercase">Table</span>
+                  <span className="text-slate-900 dark:text-white font-black">{eBillModalData.tableName}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 block uppercase">Date</span>
+                  <span className="text-slate-900 dark:text-white font-black">{eBillModalData.dateTime}</span>
+                </div>
+              </div>
+
+              <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                {eBillModalData.items.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center font-bold text-slate-700 dark:text-slate-200">
+                    <div>
+                      <span>{item.name}</span>
+                      <span className="text-slate-400 text-[11px] ml-1.5">x{item.quantity}</span>
+                    </div>
+                    <span>{formatCurrency(item.price * item.quantity)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-t border-dashed border-slate-200 dark:border-white/10 pt-3 space-y-1.5 font-bold text-slate-500 dark:text-slate-400">
+                <div className="flex justify-between">
+                  <span>Subtotal</span>
+                  <span>{formatCurrency(eBillModalData.subtotal)}</span>
+                </div>
+                {eBillModalData.cgst > 0 && (
+                  <div className="flex justify-between">
+                    <span>CGST ({cgstRate}%)</span>
+                    <span>{formatCurrency(eBillModalData.cgst)}</span>
+                  </div>
+                )}
+                {eBillModalData.sgst > 0 && (
+                  <div className="flex justify-between">
+                    <span>SGST ({sgstRate}%)</span>
+                    <span>{formatCurrency(eBillModalData.sgst)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-base font-black text-slate-900 dark:text-white pt-2 border-t border-slate-200 dark:border-white/10">
+                  <span>Grand Total</span>
+                  <span className="text-[#ff6b00]">{formatCurrency(eBillModalData.grandTotal)}</span>
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+               <button
+  type="button"
+  onClick={() => {
+    const encodedData = window.btoa(unescape(encodeURIComponent(JSON.stringify(eBillModalData))));
+    const eBillUrl = `${window.location.origin}/ebill?data=${encodedData}`;
+    const msg = `*${eBillModalData.hotelName} - Digital E-Bill* 🧾\n\nInvoice: ${eBillModalData.invoiceId}\nTable: ${eBillModalData.tableName}\nTotal Paid: *₹${eBillModalData.grandTotal.toFixed(2)}*\n\n👇 View & Download your E-Bill:\n${eBillUrl}\n\nThank you for dining with us!`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  }}
+  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer"
+>
+  Share on WhatsApp
+</button>
+                <button
+                  type="button"
+                  onClick={() => openBrowserPrintReceipt({
+                    ...eBillModalData,
+                    orderId: eBillModalData.invoiceId,
+                    tableNumber: eBillModalData.tableName,
+                    cgstRate,
+                    sgstRate,
+                    serviceChargeRate,
+                    currencySymbol: systemSettings.billing.currencySymbol
+                  })}
+                  className="px-5 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer"
+                >
+                  Print / PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }

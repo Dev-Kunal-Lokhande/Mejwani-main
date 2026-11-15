@@ -88,7 +88,110 @@ export default function IssuedBills() {
     }
   }, [hotelId]);
 
+  // Browser Print Fallback for Duplicate Bill
+  const openBrowserDuplicateReceipt = (billData) => {
+    const printWindow = window.open('', '_blank', 'width=400,height=650');
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+
+    const itemsRows = (billData.items || [])
+      .map((item) => {
+        const qty = Number(item.quantity || item.qty || 1);
+        const price = Number(item.price || 0);
+        return `
+        <tr>
+          <td style="padding: 4px 0; text-align: left;">${item.name}</td>
+          <td style="padding: 4px 0; text-align: center;">${qty}</td>
+          <td style="padding: 4px 0; text-align: right;">${price.toFixed(2)}</td>
+          <td style="padding: 4px 0; text-align: right;">${(price * qty).toFixed(2)}</td>
+        </tr>`;
+      })
+      .join('');
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Duplicate Bill - ${billData.orderId}</title>
+          <style>
+            @page { size: 80mm auto; margin: 0; }
+            body {
+              font-family: 'Courier New', monospace;
+              width: 300px;
+              margin: 0 auto;
+              padding: 15px;
+              color: #000;
+              font-size: 12px;
+            }
+            .center { text-align: center; }
+            .bold { font-weight: bold; }
+            .divider { border-top: 1px dashed #000; margin: 8px 0; }
+            table { width: 100%; border-collapse: collapse; font-size: 11px; }
+            th { border-bottom: 1px dashed #000; padding-bottom: 4px; }
+            .totals td { padding: 3px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="center bold" style="font-size: 16px;">${billData.hotelName || 'MEJWANI'}</div>
+          ${billData.address ? `<div class="center" style="font-size: 11px;">${billData.address}</div>` : ''}
+          ${billData.phone ? `<div class="center" style="font-size: 11px;">Ph: ${billData.phone}</div>` : ''}
+          ${billData.gstNumber ? `<div class="center" style="font-size: 11px;">GSTIN: ${billData.gstNumber}</div>` : ''}
+          <div class="center bold" style="font-size: 11px; margin-top: 4px;">*** DUPLICATE COPY ***</div>
+          
+          <div class="divider"></div>
+          <div><strong>Bill No:</strong> ${billData.orderId}</div>
+          <div><strong>Table:</strong> ${billData.tableNumber}</div>
+          <div><strong>Captain:</strong> ${billData.captainName}</div>
+          <div><strong>Date:</strong> ${billData.dateTime}</div>
+          <div class="divider"></div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align: left;">Item</th>
+                <th style="text-align: center;">Qty</th>
+                <th style="text-align: right;">Rate</th>
+                <th style="text-align: right;">Amt</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsRows}
+            </tbody>
+          </table>
+
+          <div class="divider"></div>
+          <table class="totals">
+            <tr>
+              <td>Subtotal:</td>
+              <td style="text-align: right;">₹${Number(billData.subtotal).toFixed(2)}</td>
+            </tr>
+            ${billData.cgst > 0 ? `<tr><td>CGST (${billData.cgstRate}%):</td><td style="text-align: right;">₹${Number(billData.cgst).toFixed(2)}</td></tr>` : ''}
+            ${billData.sgst > 0 ? `<tr><td>SGST (${billData.sgstRate}%):</td><td style="text-align: right;">₹${Number(billData.sgst).toFixed(2)}</td></tr>` : ''}
+            ${billData.serviceCharge > 0 ? `<tr><td>Service Charge (${billData.serviceChargeRate}%):</td><td style="text-align: right;">₹${Number(billData.serviceCharge).toFixed(2)}</td></tr>` : ''}
+            <tr class="bold" style="font-size: 14px; border-top: 1px dashed #000;">
+              <td style="padding-top: 6px;">GRAND TOTAL:</td>
+              <td style="padding-top: 6px; text-align: right;">₹${Number(billData.grandTotal).toFixed(2)}</td>
+            </tr>
+          </table>
+
+          <div class="divider"></div>
+          <div class="center" style="margin-top: 10px;">Thank You! Visit Again!</div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              window.onafterprint = function() { window.close(); };
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   // Handle reprint
+ // Handle reprint
   const handleReprintBill = async (order, requestResolveId = null) => {
     const dateStr = formatDateDDMMYYYY(new Date());
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -122,33 +225,23 @@ export default function IssuedBills() {
       isDuplicate: true
     };
 
-    try {
-      const response = await authorizedFetch(`${API_BASE}/bills/print?hotelId=${hotelId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(billData)
-      });
-      const data = await response.json();
-      if (data.success) {
-        toast.success('✅ Duplicate bill printing dispatched successfully.');
+    // १. ब्राउझर पॉप-अप ब्लॉक होऊ नये म्हणून लगेच Print Screen उघडा
+    openBrowserDuplicateReceipt(billData);
 
-        if (requestResolveId) {
-          await axios.post(
-            `${API_BASE}/bills/reprint-requests/${requestResolveId}/resolve`,
-            { status: 'PRINTED' },
-            getAuthConfig()
-          );
-          fetchReprintRequests();
-        }
-      } else {
-        toast.error(`❌ Printing failed: ${data.message}`);
+    // २. जर ही कॅप्टनची Reprint Request असेल तर बॅकएंडवर तिचा स्टेटस अपडेट करा
+    if (requestResolveId) {
+      try {
+        await axios.post(
+          `${API_BASE}/bills/reprint-requests/${requestResolveId}/resolve`,
+          { status: 'PRINTED' },
+          getAuthConfig()
+        );
+        fetchReprintRequests();
+      } catch (err) {
+        console.error('Failed to resolve reprint request:', err);
       }
-    } catch (err) {
-      console.error('Failed to print duplicate bill:', err);
-      toast.error('❌ Network error during printing dispatch.');
     }
   };
-
   // Reject reprint request
   const handleRejectRequest = async (requestId) => {
     try {
@@ -402,7 +495,7 @@ export default function IssuedBills() {
                             {getTableLabel(req)}
                           </span>
                           <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">
-                            KOT: {req.kot_number} • Capt: {req.captain_name}
+                            KOT: {req.kot_number} · Capt: {req.captain_name}
                           </span>
                         </div>
                         <span className="text-sm font-black text-orange-500">
