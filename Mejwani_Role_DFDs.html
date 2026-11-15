@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#f5f5f5; font-family:'Times New Roman',serif; }
+
+.topbar {
+  background:#1e3a5f; color:white; padding:8px 12px;
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;
+}
+.topbar h1 { font-size:13px; font-family:sans-serif; }
+.topbar button {
+  background:#2563eb; color:white; border:none; padding:6px 14px;
+  border-radius:5px; font-size:12px; cursor:pointer; font-family:sans-serif;
+}
+
+.tabs {
+  display:flex; gap:4px; padding:8px 12px; background:#e8e8e8;
+  flex-wrap:wrap; border-bottom:2px solid #1e3a5f;
+}
+.tab {
+  padding:5px 14px; border-radius:4px 4px 0 0; cursor:pointer;
+  font-size:12px; font-family:sans-serif; border:1px solid #bbb;
+  background:#fff; color:#333;
+}
+.tab.active { background:#1e3a5f; color:white; border-color:#1e3a5f; }
+
+.panel { display:none; }
+.panel.active { display:block; }
+
+.page {
+  width:210mm; margin:0 auto; background:white;
+  padding:8mm 7mm 6mm; min-height:270mm;
+}
+.page-title {
+  text-align:center; font-size:13pt; font-weight:bold;
+  margin-bottom:5mm; font-family:'Times New Roman',serif;
+}
+
+@media print {
+  .topbar, .tabs { display:none !important; }
+  body { background:white; }
+  .panel { display:block !important; }
+  .panel:not(.active) { display:none !important; }
+  .page { width:100%; padding:6mm; }
+  @page { size:A4 portrait; margin:0; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>🍽️ Mejwani — Role-wise DFD (1st Level)</h1>
+  <button onclick="window.print()">🖨️ Print Active Tab</button>
+</div>
+
+<div class="tabs">
+  <div class="tab active"   onclick="show('sa')">🔑 Super Admin</div>
+  <div class="tab"          onclick="show('ad')">🧑‍💼 Admin</div>
+  <div class="tab"          onclick="show('cp')">🧑‍🍳 Captain</div>
+  <div class="tab"          onclick="show('kt')">👨‍🍳 Kitchen</div>
+  <div class="tab"          onclick="show('cu')">🧑 Customer</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     HELPER: each DFD row is generated via inline SVG.
+     Layout per row:
+       Entity  x=20 w=100 h=36  cy = row*112 + 50
+       Circle  cx=270 r=30
+       DS bar  x=430 w=16 h=36
+       DS box  x=446 w=96 h=36
+     Rows start at y=30, step=112
+     ═══════════════════════════════════════════════════ -->
+
+<!-- ══ SUPER ADMIN ══════════════════════════════════ -->
+<div id="tab-sa" class="panel active">
+<div class="page">
+  <div class="page-title">3.1.3 &nbsp;—&nbsp; 1<sup>st</sup> Level Super Admin DFD</div>
+  <svg viewBox="0 0 560 650" width="100%" font-family="'Times New Roman',serif" font-size="9.5">
+    <defs><marker id="a0" markerWidth="7" markerHeight="7" refX="6" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#000"/></marker></defs>
+
+    <!-- R0: Login -->
+    <rect x="20" y="22" width="100" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="70" y="37" text-anchor="middle" font-weight="bold">Super</text><text x="70" y="51" text-anchor="middle" font-weight="bold">Admin</text>
+    <line x1="120" y1="36" x2="240" y2="36" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="180" y="32" text-anchor="middle" font-size="8">Request Login</text>
+    <line x1="240" y1="47" x2="120" y2="47" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="180" y="57" text-anchor="middle" font-size="8">Successful / Error</text>
+    <circle cx="270" cy="43" r="30" fill="white" stroke="#000" stroke-width="1.2"/><text x="270" y="38" text-anchor="middle" font-weight="bold">1.0</text><text x="270" y="50" text-anchor="middle">Login</text>
+    <line x1="300" y1="36" x2="428" y2="36" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="364" y="32" text-anchor="middle" font-size="8">Check credentials</text>
+    <line x1="428" y1="47" x2="300" y2="47" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="364" y="57" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="428" y="22" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="444" y="22" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="436" y="37" text-anchor="middle" font-weight="bold">D1</text><text x="492" y="37" text-anchor="middle">Users /</text><text x="492" y="51" text-anchor="middle">Admins</text>
+    <line x1="270" y1="73" x2="270" y2="90" stroke="#000" stroke-width="1" marker-end="url(#a0)"/>
+
+    <!-- R1: Register Hotel -->
+    <rect x="20" y="134" width="100" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="70" y="149" text-anchor="middle" font-weight="bold">Super</text><text x="70" y="163" text-anchor="middle" font-weight="bold">Admin</text>
+    <line x1="120" y1="148" x2="240" y2="148" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="180" y="144" text-anchor="middle" font-size="8">Hotel Details</text>
+    <line x1="240" y1="159" x2="120" y2="159" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="180" y="169" text-anchor="middle" font-size="8">Hotel ID / Error</text>
+    <circle cx="270" cy="155" r="30" fill="white" stroke="#000" stroke-width="1.2"/><text x="270" y="150" text-anchor="middle" font-weight="bold">1.1</text><text x="270" y="161" text-anchor="middle">Register</text><text x="270" y="172" text-anchor="middle">Hotel</text>
+    <line x1="300" y1="148" x2="428" y2="148" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="364" y="144" text-anchor="middle" font-size="8">Store hotel data</text>
+    <line x1="428" y1="159" x2="300" y2="159" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="364" y="169" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="428" y="134" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="444" y="134" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="436" y="149" text-anchor="middle" font-weight="bold">D2</text><text x="492" y="149" text-anchor="middle">Hotels</text><text x="492" y="163" text-anchor="middle">DB</text>
+    <line x1="270" y1="185" x2="270" y2="202" stroke="#000" stroke-width="1" marker-end="url(#a0)"/>
+
+    <!-- R2: Manage Hotels -->
+    <rect x="20" y="246" width="100" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="70" y="261" text-anchor="middle" font-weight="bold">Super</text><text x="70" y="275" text-anchor="middle" font-weight="bold">Admin</text>
+    <line x1="120" y1="260" x2="240" y2="260" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="180" y="256" text-anchor="middle" font-size="8">Edit / Deactivate Hotel</text>
+    <line x1="240" y1="271" x2="120" y2="271" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="180" y="281" text-anchor="middle" font-size="8">Updated / Error</text>
+    <circle cx="270" cy="267" r="30" fill="white" stroke="#000" stroke-width="1.2"/><text x="270" y="262" text-anchor="middle" font-weight="bold">1.2</text><text x="270" y="273" text-anchor="middle">Manage</text><text x="270" y="284" text-anchor="middle">Hotels</text>
+    <line x1="300" y1="260" x2="428" y2="260" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="364" y="256" text-anchor="middle" font-size="8">Update hotel record</text>
+    <line x1="428" y1="271" x2="300" y2="271" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="364" y="281" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="428" y="246" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="444" y="246" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="436" y="261" text-anchor="middle" font-weight="bold">D3</text><text x="492" y="261" text-anchor="middle">Hotels</text><text x="492" y="275" text-anchor="middle">DB</text>
+    <line x1="270" y1="297" x2="270" y2="314" stroke="#000" stroke-width="1" marker-end="url(#a0)"/>
+
+    <!-- R3: View Reports -->
+    <rect x="20" y="358" width="100" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="70" y="373" text-anchor="middle" font-weight="bold">Super</text><text x="70" y="387" text-anchor="middle" font-weight="bold">Admin</text>
+    <line x1="120" y1="372" x2="240" y2="372" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="180" y="368" text-anchor="middle" font-size="8">Request Analytics</text>
+    <line x1="240" y1="383" x2="120" y2="383" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="180" y="393" text-anchor="middle" font-size="8">System Reports</text>
+    <circle cx="270" cy="379" r="30" fill="white" stroke="#000" stroke-width="1.2"/><text x="270" y="374" text-anchor="middle" font-weight="bold">1.3</text><text x="270" y="385" text-anchor="middle">View</text><text x="270" y="396" text-anchor="middle">Reports</text>
+    <line x1="300" y1="372" x2="428" y2="372" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="364" y="368" text-anchor="middle" font-size="8">Fetch all hotel data</text>
+    <line x1="428" y1="383" x2="300" y2="383" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="364" y="393" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="428" y="358" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="444" y="358" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="436" y="373" text-anchor="middle" font-weight="bold">D4</text><text x="492" y="373" text-anchor="middle">Orders /</text><text x="492" y="387" text-anchor="middle">Bills</text>
+    <line x1="270" y1="409" x2="270" y2="426" stroke="#000" stroke-width="1" marker-end="url(#a0)"/>
+
+    <!-- R4: Logout -->
+    <rect x="20" y="470" width="100" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="70" y="485" text-anchor="middle" font-weight="bold">Super</text><text x="70" y="499" text-anchor="middle" font-weight="bold">Admin</text>
+    <line x1="120" y1="484" x2="240" y2="484" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="180" y="480" text-anchor="middle" font-size="8">Request Logout</text>
+    <line x1="240" y1="495" x2="120" y2="495" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="180" y="505" text-anchor="middle" font-size="8">Logout Successful</text>
+    <circle cx="270" cy="491" r="30" fill="white" stroke="#000" stroke-width="1.2"/><text x="270" y="486" text-anchor="middle" font-weight="bold">1.4</text><text x="270" y="497" text-anchor="middle">Logout</text>
+    <line x1="300" y1="484" x2="428" y2="484" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="364" y="480" text-anchor="middle" font-size="8">Invalidate session</text>
+    <line x1="428" y1="495" x2="300" y2="495" stroke="#000" stroke-width="1" marker-end="url(#a0)"/><text x="364" y="505" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="428" y="470" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="444" y="470" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="436" y="485" text-anchor="middle" font-weight="bold">D5</text><text x="492" y="485" text-anchor="middle">Session /</text><text x="492" y="499" text-anchor="middle">Token</text>
+
+    <text x="280" y="640" text-anchor="middle" font-size="9" font-style="italic">Fig. 3.1.3 — 1st Level Super Admin DFD</text>
+  </svg>
+</div>
+</div>
+
+<!-- ══ ADMIN ══════════════════════════════════════ -->
+<div id="tab-ad" class="panel">
+<div class="page">
+  <div class="page-title">3.1.4 &nbsp;—&nbsp; 1<sup>st</sup> Level Admin DFD</div>
+  <svg viewBox="0 0 560 870" width="100%" font-family="'Times New Roman',serif" font-size="9.5">
+    <defs><marker id="a1" markerWidth="7" markerHeight="7" refX="6" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#000"/></marker></defs>
+
+    <!-- Row generator: step=106 start cy=43 -->
+    <!-- 1.0 Login -->
+    <rect x="20" y="22" width="80" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="60" y="44" text-anchor="middle" font-weight="bold">Admin</text>
+    <line x1="100" y1="36" x2="228" y2="36" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="164" y="32" text-anchor="middle" font-size="8">Request Login</text>
+    <line x1="228" y1="47" x2="100" y2="47" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="164" y="57" text-anchor="middle" font-size="8">JWT Token / Error</text>
+    <circle cx="258" cy="43" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="258" y="38" text-anchor="middle" font-weight="bold">1.0</text><text x="258" y="51" text-anchor="middle">Login</text>
+    <line x1="286" y1="36" x2="424" y2="36" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="355" y="32" text-anchor="middle" font-size="8">Verify credentials</text>
+    <line x1="424" y1="47" x2="286" y2="47" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="355" y="57" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="22" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="22" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="37" text-anchor="middle" font-weight="bold">D1</text><text x="488" y="44" text-anchor="middle">Admins DB</text>
+    <line x1="258" y1="71" x2="258" y2="88" stroke="#000" stroke-width="1" marker-end="url(#a1)"/>
+
+    <!-- 1.1 Menu Mgmt -->
+    <rect x="20" y="128" width="80" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="60" y="150" text-anchor="middle" font-weight="bold">Admin</text>
+    <line x1="100" y1="142" x2="230" y2="142" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="165" y="138" text-anchor="middle" font-size="8">Add / Edit Items</text>
+    <line x1="230" y1="153" x2="100" y2="153" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="165" y="163" text-anchor="middle" font-size="8">Saved / Error</text>
+    <circle cx="258" cy="149" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="258" y="144" text-anchor="middle" font-weight="bold">1.1</text><text x="258" y="155" text-anchor="middle">Menu</text><text x="258" y="166" text-anchor="middle">Mgmt</text>
+    <line x1="286" y1="142" x2="424" y2="142" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="355" y="138" text-anchor="middle" font-size="8">Store menu items</text>
+    <line x1="424" y1="153" x2="286" y2="153" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="355" y="163" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="128" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="128" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="143" text-anchor="middle" font-weight="bold">D2</text><text x="488" y="143" text-anchor="middle">Menu Items /</text><text x="488" y="157" text-anchor="middle">Categories</text>
+    <line x1="258" y1="177" x2="258" y2="194" stroke="#000" stroke-width="1" marker-end="url(#a1)"/>
+
+    <!-- 1.2 Table Mgmt -->
+    <rect x="20" y="234" width="80" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="60" y="256" text-anchor="middle" font-weight="bold">Admin</text>
+    <line x1="100" y1="248" x2="230" y2="248" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="165" y="244" text-anchor="middle" font-size="8">Add Tables / Sections</text>
+    <line x1="230" y1="259" x2="100" y2="259" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="165" y="269" text-anchor="middle" font-size="8">Table Layout</text>
+    <circle cx="258" cy="255" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="258" y="250" text-anchor="middle" font-weight="bold">1.2</text><text x="258" y="261" text-anchor="middle">Table</text><text x="258" y="272" text-anchor="middle">Mgmt</text>
+    <line x1="286" y1="248" x2="424" y2="248" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="355" y="244" text-anchor="middle" font-size="8">Store table data</text>
+    <line x1="424" y1="259" x2="286" y2="259" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="355" y="269" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="234" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="234" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="249" text-anchor="middle" font-weight="bold">D3</text><text x="488" y="249" text-anchor="middle">Tables /</text><text x="488" y="263" text-anchor="middle">Sections</text>
+    <line x1="258" y1="283" x2="258" y2="300" stroke="#000" stroke-width="1" marker-end="url(#a1)"/>
+
+    <!-- 1.3 View Orders / Kitchen -->
+    <rect x="20" y="340" width="80" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="60" y="362" text-anchor="middle" font-weight="bold">Admin</text>
+    <line x1="100" y1="354" x2="230" y2="354" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="165" y="350" text-anchor="middle" font-size="8">View Kitchen Queue</text>
+    <line x1="230" y1="365" x2="100" y2="365" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="165" y="375" text-anchor="middle" font-size="8">Order List / KOT</text>
+    <circle cx="258" cy="361" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="258" y="356" text-anchor="middle" font-weight="bold">1.3</text><text x="258" y="367" text-anchor="middle">Kitchen</text><text x="258" y="378" text-anchor="middle">View</text>
+    <line x1="286" y1="354" x2="424" y2="354" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="355" y="350" text-anchor="middle" font-size="8">Fetch pending orders</text>
+    <line x1="424" y1="365" x2="286" y2="365" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="355" y="375" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="340" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="340" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="355" text-anchor="middle" font-weight="bold">D4</text><text x="488" y="355" text-anchor="middle">Orders /</text><text x="488" y="369" text-anchor="middle">KOT</text>
+    <line x1="258" y1="389" x2="258" y2="406" stroke="#000" stroke-width="1" marker-end="url(#a1)"/>
+
+    <!-- 1.4 Billing -->
+    <rect x="20" y="446" width="80" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="60" y="468" text-anchor="middle" font-weight="bold">Admin</text>
+    <line x1="100" y1="460" x2="230" y2="460" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="165" y="456" text-anchor="middle" font-size="8">Generate Bill</text>
+    <line x1="230" y1="471" x2="100" y2="471" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="165" y="481" text-anchor="middle" font-size="8">Bill Receipt</text>
+    <circle cx="258" cy="467" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="258" y="462" text-anchor="middle" font-weight="bold">1.4</text><text x="258" y="473" text-anchor="middle">Billing</text>
+    <line x1="286" y1="460" x2="424" y2="460" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="355" y="456" text-anchor="middle" font-size="8">Store bill data</text>
+    <line x1="424" y1="471" x2="286" y2="471" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="355" y="481" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="446" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="446" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="461" text-anchor="middle" font-weight="bold">D5</text><text x="488" y="461" text-anchor="middle">Bills</text><text x="488" y="475" text-anchor="middle">(Payments)</text>
+    <line x1="258" y1="495" x2="258" y2="512" stroke="#000" stroke-width="1" marker-end="url(#a1)"/>
+
+    <!-- 1.5 Staff Mgmt -->
+    <rect x="20" y="552" width="80" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="60" y="574" text-anchor="middle" font-weight="bold">Admin</text>
+    <line x1="100" y1="566" x2="230" y2="566" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="165" y="562" text-anchor="middle" font-size="8">Manage Staff</text>
+    <line x1="230" y1="577" x2="100" y2="577" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="165" y="587" text-anchor="middle" font-size="8">Staff List / Attendance</text>
+    <circle cx="258" cy="573" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="258" y="568" text-anchor="middle" font-weight="bold">1.5</text><text x="258" y="579" text-anchor="middle">Staff</text><text x="258" y="590" text-anchor="middle">Mgmt</text>
+    <line x1="286" y1="566" x2="424" y2="566" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="355" y="562" text-anchor="middle" font-size="8">Store staff data</text>
+    <line x1="424" y1="577" x2="286" y2="577" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="355" y="587" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="552" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="552" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="567" text-anchor="middle" font-weight="bold">D6</text><text x="488" y="567" text-anchor="middle">Staff /</text><text x="488" y="581" text-anchor="middle">Attendance</text>
+    <line x1="258" y1="601" x2="258" y2="618" stroke="#000" stroke-width="1" marker-end="url(#a1)"/>
+
+    <!-- 1.6 Analytics -->
+    <rect x="20" y="658" width="80" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="60" y="680" text-anchor="middle" font-weight="bold">Admin</text>
+    <line x1="100" y1="672" x2="230" y2="672" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="165" y="668" text-anchor="middle" font-size="8">View Analytics</text>
+    <line x1="230" y1="683" x2="100" y2="683" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="165" y="693" text-anchor="middle" font-size="8">Sales Report</text>
+    <circle cx="258" cy="679" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="258" y="674" text-anchor="middle" font-weight="bold">1.6</text><text x="258" y="685" text-anchor="middle">Analytics</text>
+    <line x1="286" y1="672" x2="424" y2="672" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="355" y="668" text-anchor="middle" font-size="8">Read orders &amp; bills</text>
+    <line x1="424" y1="683" x2="286" y2="683" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="355" y="693" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="658" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="658" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="673" text-anchor="middle" font-weight="bold">D7</text><text x="488" y="673" text-anchor="middle">Orders /</text><text x="488" y="687" text-anchor="middle">Bills</text>
+    <line x1="258" y1="707" x2="258" y2="724" stroke="#000" stroke-width="1" marker-end="url(#a1)"/>
+
+    <!-- 1.7 Logout -->
+    <rect x="20" y="764" width="80" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="60" y="786" text-anchor="middle" font-weight="bold">Admin</text>
+    <line x1="100" y1="778" x2="230" y2="778" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="165" y="774" text-anchor="middle" font-size="8">Request Logout</text>
+    <line x1="230" y1="789" x2="100" y2="789" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="165" y="799" text-anchor="middle" font-size="8">Logout Successful</text>
+    <circle cx="258" cy="785" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="258" y="780" text-anchor="middle" font-weight="bold">1.7</text><text x="258" y="791" text-anchor="middle">Logout</text>
+    <line x1="286" y1="778" x2="424" y2="778" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="355" y="774" text-anchor="middle" font-size="8">Invalidate session</text>
+    <line x1="424" y1="789" x2="286" y2="789" stroke="#000" stroke-width="1" marker-end="url(#a1)"/><text x="355" y="799" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="764" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="764" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="779" text-anchor="middle" font-weight="bold">D8</text><text x="488" y="779" text-anchor="middle">Session /</text><text x="488" y="793" text-anchor="middle">Token</text>
+
+    <text x="280" y="860" text-anchor="middle" font-size="9" font-style="italic">Fig. 3.1.4 — 1st Level Admin DFD</text>
+  </svg>
+</div>
+</div>
+
+<!-- ══ CAPTAIN ════════════════════════════════════ -->
+<div id="tab-cp" class="panel">
+<div class="page">
+  <div class="page-title">3.1.5 &nbsp;—&nbsp; 1<sup>st</sup> Level Captain DFD</div>
+  <svg viewBox="0 0 560 760" width="100%" font-family="'Times New Roman',serif" font-size="9.5">
+    <defs><marker id="a2" markerWidth="7" markerHeight="7" refX="6" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#000"/></marker></defs>
+
+    <!-- 1.0 Login -->
+    <rect x="20" y="22" width="90" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="65" y="44" text-anchor="middle" font-weight="bold">Captain</text>
+    <line x1="110" y1="36" x2="232" y2="36" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="171" y="32" text-anchor="middle" font-size="8">Request Login</text>
+    <line x1="232" y1="47" x2="110" y2="47" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="171" y="57" text-anchor="middle" font-size="8">JWT / Error</text>
+    <circle cx="260" cy="43" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="260" y="38" text-anchor="middle" font-weight="bold">1.0</text><text x="260" y="51" text-anchor="middle">Login</text>
+    <line x1="288" y1="36" x2="424" y2="36" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="356" y="32" text-anchor="middle" font-size="8">Verify credentials</text>
+    <line x1="424" y1="47" x2="288" y2="47" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="356" y="57" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="22" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="22" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="37" text-anchor="middle" font-weight="bold">D1</text><text x="488" y="44" text-anchor="middle">Users DB</text>
+    <line x1="260" y1="71" x2="260" y2="88" stroke="#000" stroke-width="1" marker-end="url(#a2)"/>
+
+    <!-- 1.1 View Tables -->
+    <rect x="20" y="128" width="90" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="65" y="150" text-anchor="middle" font-weight="bold">Captain</text>
+    <line x1="110" y1="142" x2="232" y2="142" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="171" y="138" text-anchor="middle" font-size="8">Request Table Map</text>
+    <line x1="232" y1="153" x2="110" y2="153" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="171" y="163" text-anchor="middle" font-size="8">Table Layout</text>
+    <circle cx="260" cy="149" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="260" y="144" text-anchor="middle" font-weight="bold">1.1</text><text x="260" y="155" text-anchor="middle">View</text><text x="260" y="166" text-anchor="middle">Tables</text>
+    <line x1="288" y1="142" x2="424" y2="142" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="356" y="138" text-anchor="middle" font-size="8">Fetch table status</text>
+    <line x1="424" y1="153" x2="288" y2="153" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="356" y="163" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="128" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="128" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="143" text-anchor="middle" font-weight="bold">D2</text><text x="488" y="143" text-anchor="middle">Tables /</text><text x="488" y="157" text-anchor="middle">Sections</text>
+    <line x1="260" y1="177" x2="260" y2="194" stroke="#000" stroke-width="1" marker-end="url(#a2)"/>
+
+    <!-- 1.2 Take Order -->
+    <rect x="20" y="234" width="90" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="65" y="256" text-anchor="middle" font-weight="bold">Captain</text>
+    <line x1="110" y1="248" x2="232" y2="248" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="171" y="244" text-anchor="middle" font-size="8">Select Table + Items</text>
+    <line x1="232" y1="259" x2="110" y2="259" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="171" y="269" text-anchor="middle" font-size="8">Order Confirmed</text>
+    <circle cx="260" cy="255" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="260" y="250" text-anchor="middle" font-weight="bold">1.2</text><text x="260" y="261" text-anchor="middle">Take</text><text x="260" y="272" text-anchor="middle">Order</text>
+    <line x1="288" y1="248" x2="424" y2="248" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="356" y="244" text-anchor="middle" font-size="8">Save order (pending)</text>
+    <line x1="424" y1="259" x2="288" y2="259" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="356" y="269" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="234" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="234" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="249" text-anchor="middle" font-weight="bold">D3</text><text x="488" y="249" text-anchor="middle">Orders /</text><text x="488" y="263" text-anchor="middle">Items</text>
+    <line x1="260" y1="283" x2="260" y2="300" stroke="#000" stroke-width="1" marker-end="url(#a2)"/>
+
+    <!-- 1.3 Send KOT -->
+    <rect x="20" y="340" width="90" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="65" y="362" text-anchor="middle" font-weight="bold">Captain</text>
+    <line x1="110" y1="354" x2="232" y2="354" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="171" y="350" text-anchor="middle" font-size="8">Confirm KOT Send</text>
+    <line x1="232" y1="365" x2="110" y2="365" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="171" y="375" text-anchor="middle" font-size="8">KOT Sent</text>
+    <circle cx="260" cy="361" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="260" y="356" text-anchor="middle" font-weight="bold">1.3</text><text x="260" y="367" text-anchor="middle">Send</text><text x="260" y="378" text-anchor="middle">KOT</text>
+    <line x1="288" y1="354" x2="424" y2="354" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="356" y="350" text-anchor="middle" font-size="8">Status → sent_to_kitchen</text>
+    <line x1="424" y1="365" x2="288" y2="365" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="356" y="375" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="340" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="340" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="355" text-anchor="middle" font-weight="bold">D4</text><text x="488" y="355" text-anchor="middle">KOT /</text><text x="488" y="369" text-anchor="middle">Orders</text>
+    <line x1="260" y1="389" x2="260" y2="406" stroke="#000" stroke-width="1" marker-end="url(#a2)"/>
+
+    <!-- 1.4 View Status -->
+    <rect x="20" y="446" width="90" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="65" y="468" text-anchor="middle" font-weight="bold">Captain</text>
+    <line x1="110" y1="460" x2="232" y2="460" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="171" y="456" text-anchor="middle" font-size="8">Check Order Status</text>
+    <line x1="232" y1="471" x2="110" y2="471" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="171" y="481" text-anchor="middle" font-size="8">Status Details</text>
+    <circle cx="260" cy="467" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="260" y="462" text-anchor="middle" font-weight="bold">1.4</text><text x="260" y="473" text-anchor="middle">View</text><text x="260" y="484" text-anchor="middle">Status</text>
+    <line x1="288" y1="460" x2="424" y2="460" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="356" y="456" text-anchor="middle" font-size="8">Fetch order status</text>
+    <line x1="424" y1="471" x2="288" y2="471" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="356" y="481" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="446" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="446" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="461" text-anchor="middle" font-weight="bold">D5</text><text x="488" y="461" text-anchor="middle">Orders</text><text x="488" y="475" text-anchor="middle">(Status)</text>
+    <line x1="260" y1="495" x2="260" y2="512" stroke="#000" stroke-width="1" marker-end="url(#a2)"/>
+
+    <!-- 1.5 Logout -->
+    <rect x="20" y="552" width="90" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="65" y="574" text-anchor="middle" font-weight="bold">Captain</text>
+    <line x1="110" y1="566" x2="232" y2="566" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="171" y="562" text-anchor="middle" font-size="8">Request Logout</text>
+    <line x1="232" y1="577" x2="110" y2="577" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="171" y="587" text-anchor="middle" font-size="8">Logout Successful</text>
+    <circle cx="260" cy="573" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="260" y="568" text-anchor="middle" font-weight="bold">1.5</text><text x="260" y="579" text-anchor="middle">Logout</text>
+    <line x1="288" y1="566" x2="424" y2="566" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="356" y="562" text-anchor="middle" font-size="8">Invalidate session</text>
+    <line x1="424" y1="577" x2="288" y2="577" stroke="#000" stroke-width="1" marker-end="url(#a2)"/><text x="356" y="587" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="552" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="552" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="567" text-anchor="middle" font-weight="bold">D6</text><text x="488" y="567" text-anchor="middle">Session /</text><text x="488" y="581" text-anchor="middle">Token</text>
+
+    <text x="280" y="750" text-anchor="middle" font-size="9" font-style="italic">Fig. 3.1.5 — 1st Level Captain DFD</text>
+  </svg>
+</div>
+</div>
+
+<!-- ══ KITCHEN ════════════════════════════════════ -->
+<div id="tab-kt" class="panel">
+<div class="page">
+  <div class="page-title">3.1.6 &nbsp;—&nbsp; 1<sup>st</sup> Level Kitchen Staff DFD</div>
+  <svg viewBox="0 0 560 540" width="100%" font-family="'Times New Roman',serif" font-size="9.5">
+    <defs><marker id="a3" markerWidth="7" markerHeight="7" refX="6" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#000"/></marker></defs>
+
+    <!-- 1.0 Login -->
+    <rect x="20" y="22" width="100" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="70" y="44" text-anchor="middle" font-weight="bold">Kitchen Staff</text>
+    <line x1="120" y1="36" x2="238" y2="36" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="179" y="32" text-anchor="middle" font-size="8">Request Login</text>
+    <line x1="238" y1="47" x2="120" y2="47" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="179" y="57" text-anchor="middle" font-size="8">JWT / Error</text>
+    <circle cx="266" cy="43" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="266" y="38" text-anchor="middle" font-weight="bold">1.0</text><text x="266" y="51" text-anchor="middle">Login</text>
+    <line x1="294" y1="36" x2="424" y2="36" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="359" y="32" text-anchor="middle" font-size="8">Verify credentials</text>
+    <line x1="424" y1="47" x2="294" y2="47" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="359" y="57" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="22" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="22" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="37" text-anchor="middle" font-weight="bold">D1</text><text x="488" y="44" text-anchor="middle">Users DB</text>
+    <line x1="266" y1="71" x2="266" y2="88" stroke="#000" stroke-width="1" marker-end="url(#a3)"/>
+
+    <!-- 1.1 View KOT Queue -->
+    <rect x="20" y="128" width="100" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="70" y="150" text-anchor="middle" font-weight="bold">Kitchen Staff</text>
+    <line x1="120" y1="142" x2="238" y2="142" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="179" y="138" text-anchor="middle" font-size="8">Request Queue</text>
+    <line x1="238" y1="153" x2="120" y2="153" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="179" y="163" text-anchor="middle" font-size="8">Pending KOT List</text>
+    <circle cx="266" cy="149" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="266" y="144" text-anchor="middle" font-weight="bold">1.1</text><text x="266" y="155" text-anchor="middle">View KOT</text><text x="266" y="166" text-anchor="middle">Queue</text>
+    <line x1="294" y1="142" x2="424" y2="142" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="359" y="138" text-anchor="middle" font-size="8">Fetch pending orders</text>
+    <line x1="424" y1="153" x2="294" y2="153" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="359" y="163" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="128" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="128" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="143" text-anchor="middle" font-weight="bold">D2</text><text x="488" y="143" text-anchor="middle">Orders /</text><text x="488" y="157" text-anchor="middle">KOT</text>
+    <line x1="266" y1="177" x2="266" y2="194" stroke="#000" stroke-width="1" marker-end="url(#a3)"/>
+
+    <!-- 1.2 Mark Cooking -->
+    <rect x="20" y="234" width="100" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="70" y="256" text-anchor="middle" font-weight="bold">Kitchen Staff</text>
+    <line x1="120" y1="248" x2="238" y2="248" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="179" y="244" text-anchor="middle" font-size="8">Start Cooking</text>
+    <line x1="238" y1="259" x2="120" y2="259" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="179" y="269" text-anchor="middle" font-size="8">Status Updated</text>
+    <circle cx="266" cy="255" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="266" y="250" text-anchor="middle" font-weight="bold">1.2</text><text x="266" y="261" text-anchor="middle">Mark</text><text x="266" y="272" text-anchor="middle">Cooking</text>
+    <line x1="294" y1="248" x2="424" y2="248" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="359" y="244" text-anchor="middle" font-size="8">UPDATE status=cooking</text>
+    <line x1="424" y1="259" x2="294" y2="259" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="359" y="269" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="234" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="234" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="249" text-anchor="middle" font-weight="bold">D3</text><text x="488" y="249" text-anchor="middle">Orders</text><text x="488" y="263" text-anchor="middle">(Status)</text>
+    <line x1="266" y1="283" x2="266" y2="300" stroke="#000" stroke-width="1" marker-end="url(#a3)"/>
+
+    <!-- 1.3 Mark Ready -->
+    <rect x="20" y="340" width="100" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="70" y="362" text-anchor="middle" font-weight="bold">Kitchen Staff</text>
+    <line x1="120" y1="354" x2="238" y2="354" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="179" y="350" text-anchor="middle" font-size="8">Order Ready</text>
+    <line x1="238" y1="365" x2="120" y2="365" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="179" y="375" text-anchor="middle" font-size="8">Confirmed</text>
+    <circle cx="266" cy="361" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="266" y="356" text-anchor="middle" font-weight="bold">1.3</text><text x="266" y="367" text-anchor="middle">Mark</text><text x="266" y="378" text-anchor="middle">Ready</text>
+    <line x1="294" y1="354" x2="424" y2="354" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="359" y="350" text-anchor="middle" font-size="8">UPDATE status=ready</text>
+    <line x1="424" y1="365" x2="294" y2="365" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="359" y="375" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="340" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="340" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="355" text-anchor="middle" font-weight="bold">D4</text><text x="488" y="355" text-anchor="middle">Orders</text><text x="488" y="369" text-anchor="middle">(Status)</text>
+    <line x1="266" y1="389" x2="266" y2="406" stroke="#000" stroke-width="1" marker-end="url(#a3)"/>
+
+    <!-- 1.4 Logout -->
+    <rect x="20" y="446" width="100" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="70" y="468" text-anchor="middle" font-weight="bold">Kitchen Staff</text>
+    <line x1="120" y1="460" x2="238" y2="460" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="179" y="456" text-anchor="middle" font-size="8">Request Logout</text>
+    <line x1="238" y1="471" x2="120" y2="471" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="179" y="481" text-anchor="middle" font-size="8">Logout Successful</text>
+    <circle cx="266" cy="467" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="266" y="462" text-anchor="middle" font-weight="bold">1.4</text><text x="266" y="473" text-anchor="middle">Logout</text>
+    <line x1="294" y1="460" x2="424" y2="460" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="359" y="456" text-anchor="middle" font-size="8">Invalidate session</text>
+    <line x1="424" y1="471" x2="294" y2="471" stroke="#000" stroke-width="1" marker-end="url(#a3)"/><text x="359" y="481" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="446" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="446" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="461" text-anchor="middle" font-weight="bold">D5</text><text x="488" y="461" text-anchor="middle">Session /</text><text x="488" y="475" text-anchor="middle">Token</text>
+
+    <text x="280" y="530" text-anchor="middle" font-size="9" font-style="italic">Fig. 3.1.6 — 1st Level Kitchen Staff DFD</text>
+  </svg>
+</div>
+</div>
+
+<!-- ══ CUSTOMER ═══════════════════════════════════ -->
+<div id="tab-cu" class="panel">
+<div class="page">
+  <div class="page-title">3.1.7 &nbsp;—&nbsp; 1<sup>st</sup> Level Customer DFD</div>
+  <svg viewBox="0 0 560 430" width="100%" font-family="'Times New Roman',serif" font-size="9.5">
+    <defs><marker id="a4" markerWidth="7" markerHeight="7" refX="6" refY="2.5" orient="auto"><path d="M0,0 L0,5 L7,2.5z" fill="#000"/></marker></defs>
+
+    <!-- 1.0 Scan QR / View Menu -->
+    <rect x="20" y="22" width="90" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="65" y="44" text-anchor="middle" font-weight="bold">Customer</text>
+    <line x1="110" y1="36" x2="232" y2="36" stroke="#000" stroke-width="1" marker-end="url(#a4)"/><text x="171" y="32" text-anchor="middle" font-size="8">Scan QR / Open URL</text>
+    <line x1="232" y1="47" x2="110" y2="47" stroke="#000" stroke-width="1" marker-end="url(#a4)"/><text x="171" y="57" text-anchor="middle" font-size="8">Menu Page Loaded</text>
+    <circle cx="260" cy="43" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="260" y="38" text-anchor="middle" font-weight="bold">1.0</text><text x="260" y="51" text-anchor="middle">Scan QR /</text><text x="260" y="62" text-anchor="middle">Load Menu</text>
+    <line x1="288" y1="36" x2="424" y2="36" stroke="#000" stroke-width="1" marker-end="url(#a4)"/><text x="356" y="32" text-anchor="middle" font-size="8">Fetch hotel menu</text>
+    <line x1="424" y1="47" x2="288" y2="47" stroke="#000" stroke-width="1" marker-end="url(#a4)"/><text x="356" y="57" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="22" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="22" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="37" text-anchor="middle" font-weight="bold">D1</text><text x="488" y="37" text-anchor="middle">Menu Items /</text><text x="488" y="51" text-anchor="middle">Categories</text>
+    <line x1="260" y1="71" x2="260" y2="88" stroke="#000" stroke-width="1" marker-end="url(#a4)"/>
+
+    <!-- 1.1 Browse Categories -->
+    <rect x="20" y="128" width="90" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="65" y="150" text-anchor="middle" font-weight="bold">Customer</text>
+    <line x1="110" y1="142" x2="232" y2="142" stroke="#000" stroke-width="1" marker-end="url(#a4)"/><text x="171" y="138" text-anchor="middle" font-size="8">Select Category</text>
+    <line x1="232" y1="153" x2="110" y2="153" stroke="#000" stroke-width="1" marker-end="url(#a4)"/><text x="171" y="163" text-anchor="middle" font-size="8">Items List</text>
+    <circle cx="260" cy="149" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="260" y="144" text-anchor="middle" font-weight="bold">1.1</text><text x="260" y="155" text-anchor="middle">Browse</text><text x="260" y="166" text-anchor="middle">Categories</text>
+    <line x1="288" y1="142" x2="424" y2="142" stroke="#000" stroke-width="1" marker-end="url(#a4)"/><text x="356" y="138" text-anchor="middle" font-size="8">Fetch items by category</text>
+    <line x1="424" y1="153" x2="288" y2="153" stroke="#000" stroke-width="1" marker-end="url(#a4)"/><text x="356" y="163" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="128" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="128" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="143" text-anchor="middle" font-weight="bold">D2</text><text x="488" y="143" text-anchor="middle">Menu Items /</text><text x="488" y="157" text-anchor="middle">Categories</text>
+    <line x1="260" y1="177" x2="260" y2="194" stroke="#000" stroke-width="1" marker-end="url(#a4)"/>
+
+    <!-- 1.2 View Item Details -->
+    <rect x="20" y="234" width="90" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="65" y="256" text-anchor="middle" font-weight="bold">Customer</text>
+    <line x1="110" y1="248" x2="232" y2="248" stroke="#000" stroke-width="1" marker-end="url(#a4)"/><text x="171" y="244" text-anchor="middle" font-size="8">Select Item</text>
+    <line x1="232" y1="259" x2="110" y2="259" stroke="#000" stroke-width="1" marker-end="url(#a4)"/><text x="171" y="269" text-anchor="middle" font-size="8">Price / Description</text>
+    <circle cx="260" cy="255" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="260" y="250" text-anchor="middle" font-weight="bold">1.2</text><text x="260" y="261" text-anchor="middle">View Item</text><text x="260" y="272" text-anchor="middle">Details</text>
+    <line x1="288" y1="248" x2="424" y2="248" stroke="#000" stroke-width="1" marker-end="url(#a4)"/><text x="356" y="244" text-anchor="middle" font-size="8">Fetch item by ID</text>
+    <line x1="424" y1="259" x2="288" y2="259" stroke="#000" stroke-width="1" marker-end="url(#a4)"/><text x="356" y="269" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="234" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="234" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="249" text-anchor="middle" font-weight="bold">D3</text><text x="488" y="249" text-anchor="middle">Menu Items</text><text x="488" y="263" text-anchor="middle">(Read)</text>
+    <line x1="260" y1="283" x2="260" y2="300" stroke="#000" stroke-width="1" marker-end="url(#a4)"/>
+
+    <!-- 1.3 Request Bill -->
+    <rect x="20" y="340" width="90" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="65" y="362" text-anchor="middle" font-weight="bold">Customer</text>
+    <line x1="110" y1="354" x2="232" y2="354" stroke="#000" stroke-width="1" marker-end="url(#a4)"/><text x="171" y="350" text-anchor="middle" font-size="8">Request Bill</text>
+    <line x1="232" y1="365" x2="110" y2="365" stroke="#000" stroke-width="1" marker-end="url(#a4)"/><text x="171" y="375" text-anchor="middle" font-size="8">Bill / Receipt</text>
+    <circle cx="260" cy="361" r="28" fill="white" stroke="#000" stroke-width="1.2"/><text x="260" y="356" text-anchor="middle" font-weight="bold">1.3</text><text x="260" y="367" text-anchor="middle">Request</text><text x="260" y="378" text-anchor="middle">Bill</text>
+    <line x1="288" y1="354" x2="424" y2="354" stroke="#000" stroke-width="1" marker-end="url(#a4)"/><text x="356" y="350" text-anchor="middle" font-size="8">Fetch bill by table</text>
+    <line x1="424" y1="365" x2="288" y2="365" stroke="#000" stroke-width="1" marker-end="url(#a4)"/><text x="356" y="375" text-anchor="middle" font-size="8">Reply</text>
+    <rect x="424" y="340" width="16" height="36" fill="#ddd" stroke="#000" stroke-width="1.2"/><rect x="440" y="340" width="96" height="36" fill="white" stroke="#000" stroke-width="1.2"/><text x="432" y="355" text-anchor="middle" font-weight="bold">D4</text><text x="488" y="355" text-anchor="middle">Bills</text><text x="488" y="369" text-anchor="middle">(Read)</text>
+
+    <text x="280" y="420" text-anchor="middle" font-size="9" font-style="italic">Fig. 3.1.7 — 1st Level Customer DFD</text>
+  </svg>
+</div>
+</div>
+
+<script>
+  function show(id) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + id).classList.add('active');
+    event.target.classList.add('active');
+  }
+</script>
+</body>
+</html>

@@ -7,9 +7,6 @@ import java.math.BigDecimal;
 
 @Entity
 @Table(name = "order_items")
-@Data
-@ToString(exclude = {"order", "menuItem"})
-@EqualsAndHashCode(exclude = {"order", "menuItem"})
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -43,4 +40,21 @@ public class OrderItem {
 
     @Column(name = "item_note")
     private String itemNote;
+
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public Order getOrder() { return order; }
+    public void setOrder(Order order) { this.order = order; }
+    public MenuItem getMenuItem() { return menuItem; }
+    public void setMenuItem(MenuItem menuItem) { this.menuItem = menuItem; }
+    public Integer getQuantity() { return quantity; }
+    public void setQuantity(Integer quantity) { this.quantity = quantity; }
+    public Integer getPrintedQuantity() { return printedQuantity; }
+    public void setPrintedQuantity(Integer printedQuantity) { this.printedQuantity = printedQuantity; }
+    public BigDecimal getUnitPrice() { return unitPrice; }
+    public void setUnitPrice(BigDecimal unitPrice) { this.unitPrice = unitPrice; }
+    public String getItemName() { return itemName; }
+    public void setItemName(String itemName) { this.itemName = itemName; }
+    public String getItemNote() { return itemNote; }
+    public void setItemNote(String itemNote) { this.itemNote = itemNote; }
 }
