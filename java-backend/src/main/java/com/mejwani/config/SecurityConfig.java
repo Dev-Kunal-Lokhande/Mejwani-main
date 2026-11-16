@@ -71,7 +71,7 @@ public class SecurityConfig {
                 // Print agent — local service, no user auth needed
                 .requestMatchers("/api/print-agent/**").permitAll()
                 // Everything else needs JWT
-                .anyRequest().permitAll()
+                .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
