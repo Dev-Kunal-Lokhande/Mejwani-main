@@ -66,10 +66,9 @@ public class AdminController {
         ));
     }
 
-    // POST /api/admin/login
+// POST /api/admin/login
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, Object> body) {
-        // Support both "email" and "username" fields from frontend
         String email = body.containsKey("email") ? body.get("email").toString()
                      : body.containsKey("username") ? body.get("username").toString() : "";
         String password = body.containsKey("password") ? body.get("password").toString() : "";
@@ -81,14 +80,20 @@ public class AdminController {
         }
 
         Admin admin = adminOpt.get();
-        if (!passwordEncoder.matches(password, admin.getPassword())) {
+        
+        // दोन्ही पद्धती तपासा: BCrypt हॅश किंवा साधे प्लेन टेक्स्ट
+        boolean passwordValid = passwordEncoder.matches(password, admin.getPassword()) 
+                                || password.equals(admin.getPassword());
+
+        if (!passwordValid) {
             return ResponseEntity.status(401).body(Map.of(
                 "success", false, "message", "Invalid email or password"));
         }
 
-        if (Boolean.FALSE.equals(admin.getIsActive())) {
-            return ResponseEntity.status(403).body(Map.of(
-                "success", false, "message", "Account is disabled. Contact support."));
+        // जर पासवर्ड प्लेन टेक्स्ट असेल, तर तो आपोआप BCrypt मध्ये सुरक्षित करून सेव्ह होईल
+        if (!admin.getPassword().startsWith("$2a$")) {
+            admin.setPassword(passwordEncoder.encode(password));
+            adminRepository.save(admin);
         }
 
         Long hotelId = admin.getHotel() != null ? admin.getHotel().getId() : null;
@@ -109,7 +114,6 @@ public class AdminController {
             )
         ));
     }
-
     // GET /api/admin/me
     @GetMapping("/me")
     public ResponseEntity<?> getMe() {
