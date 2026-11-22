@@ -20,16 +20,37 @@ import socket from '../../../shared/services/socketClient';
 import { API_BASE, authorizedFetch } from '../../../shared/services/apiBase';
 import { formatCurrencyWithSettings, getCachedSystemSettings } from '../../../shared/services/systemSettings';
 import { getCachedMenu, setCachedMenu } from '../../../shared/services/menuCache';
-import axios from 'axios';
 import DiningTimer from '../../../shared/components/DiningTimer';
+
+const parseJsonSafe = async (res) => {
+  if (!res) return null;
+  if (typeof res.text === 'function') {
+    const text = await res.text();
+    if (!text) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
+  }
+  return res.data ?? res;
+};
+
+const getHotelId = () => {
+  try {
+    const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
+    return adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
+  } catch {
+    return localStorage.getItem('mejwani_hotel_id') || '';
+  }
+};
 
 export default function ParcelManagement() {
   const [tables, setTables] = useState([]);
   const [orders, setOrders] = useState([]);
   const [printerConfig, setPrinterConfig] = useState(() => {
     try {
-      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = getHotelId();
       const saved = localStorage.getItem(`mejwani_printer_config_${hotelId}`);
       return saved ? JSON.parse(saved) : null;
     } catch {
@@ -117,15 +138,22 @@ export default function ParcelManagement() {
   const [formDisplayOrder, setFormDisplayOrder] = useState(0);
   const [formIsActive, setFormIsActive] = useState(true);
 
-  // Filter only PARCEL tables and active orders
   const parcelTables = useMemo(() => {
     return tables
-      .filter(t => t.section_name?.toUpperCase() === 'PARCEL')
+      .filter(t => {
+        const sec = (t.section_name ?? t.sectionName ?? t.section ?? '').toString().trim().toUpperCase();
+        const isParcelFlag = t.is_parcel === true || t.isParcel === true;
+        return sec === 'PARCEL' || sec.includes('PARCEL') || isParcelFlag;
+      })
       .sort((a, b) => {
-        const orderA = a.display_order !== undefined ? Number(a.display_order) : 0;
-        const orderB = b.display_order !== undefined ? Number(b.display_order) : 0;
-        if (orderA !== orderB) return orderA - orderB;
-        return a.table_number.localeCompare(b.table_number, undefined, { numeric: true });
+        const orderA = a.display_order ?? a.displayOrder ?? 0;
+        const orderB = b.display_order ?? b.displayOrder ?? 0;
+        if (Number(orderA) !== Number(orderB)) return Number(orderA) - Number(orderB);
+        return String(a.table_number ?? a.tableNumber ?? '').localeCompare(
+          String(b.table_number ?? b.tableNumber ?? ''),
+          undefined,
+          { numeric: true }
+        );
       });
   }, [tables]);
 
@@ -167,12 +195,15 @@ export default function ParcelManagement() {
     if (isFetchingTablesRef.current) return;
     isFetchingTablesRef.current = true;
     try {
-      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = getHotelId();
       const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
-      const tablesRes = await fetch(`${API_BASE}/tables${hotelParam}`);
-      const tablesData = await tablesRes.json();
-      if (tablesData.success) {
+      const tablesRes = await authorizedFetch(`${API_BASE}/tables${hotelParam}`);
+      const tablesData = await parseJsonSafe(tablesRes);
+      if (tablesRes && typeof tablesRes.ok === 'boolean' && !tablesRes.ok) {
+        console.warn('[Parcel] Fetch tables status:', tablesRes.status, tablesData?.message || '');
+        return;
+      }
+      if (tablesData?.success) {
         setTables(tablesData.data || []);
       }
     } catch (err) {
@@ -186,12 +217,15 @@ export default function ParcelManagement() {
     if (isFetchingOrdersRef.current) return;
     isFetchingOrdersRef.current = true;
     try {
-      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = getHotelId();
       const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
-      const ordersRes = await fetch(`${API_BASE}/orders${hotelParam}`);
-      const ordersData = await ordersRes.json();
-      if (ordersData.success) {
+      const ordersRes = await authorizedFetch(`${API_BASE}/orders${hotelParam}`);
+      const ordersData = await parseJsonSafe(ordersRes);
+      if (ordersRes && typeof ordersRes.ok === 'boolean' && !ordersRes.ok) {
+        console.warn('[Parcel] Fetch orders status:', ordersRes.status, ordersData?.message || '');
+        return;
+      }
+      if (ordersData?.success) {
         const parcelOrders = (ordersData.data || []).filter(o => o.order_type === 'PARCEL');
         setOrders(parcelOrders);
       }
@@ -238,18 +272,14 @@ export default function ParcelManagement() {
   };
 
   useEffect(() => {
-    const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-    const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+    const hotelId = getHotelId();
     if (!hotelId || hotelId === '0') return;
 
     const fetchPrinterConfig = async () => {
       try {
-        const token = localStorage.getItem('mejwani_admin_jwt');
-        const resp = await fetch(`${API_BASE}/print-agent/status`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await resp.json();
-        if (resp.ok && data && data.success && data.agent) {
+        const resp = await authorizedFetch(`${API_BASE}/print-agent/status`);
+        const data = await parseJsonSafe(resp);
+        if (resp?.ok && data && data.success && data.agent) {
           const config = typeof data.agent.printer_config === 'string'
             ? JSON.parse(data.agent.printer_config)
             : data.agent.printer_config;
@@ -277,8 +307,7 @@ export default function ParcelManagement() {
     syncOperationalState();
 
     const joinRoom = () => {
-      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = getHotelId();
       if (hotelId) {
         socket.emit('join-hotel-room', `${hotelId}:admin`);
       }
@@ -351,7 +380,6 @@ export default function ParcelManagement() {
     };
   }, [syncOperationalState, fetchTables, fetchOrders]);
 
-  // Load menu items
   const loadMenuItems = async () => {
     const cached = getCachedMenu();
     if (cached && cached.length > 0) {
@@ -359,13 +387,13 @@ export default function ParcelManagement() {
       return;
     }
     try {
-      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = getHotelId();
       const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
-      const res = await axios.get(`${API_BASE}/menu${hotelParam}`);
-      if (res.data.success) {
-        setCachedMenu(res.data.data);
-        setMenuItems(res.data.data || []);
+      const res = await authorizedFetch(`${API_BASE}/menu${hotelParam}`);
+      const data = await parseJsonSafe(res);
+      if (data?.success) {
+        setCachedMenu(data.data);
+        setMenuItems(data.data || []);
       }
     } catch (err) {
       console.error('[Parcel] Failed to load menu items:', err);
@@ -663,8 +691,7 @@ export default function ParcelManagement() {
 
     setIsSubmittingDirectOrder(true);
     try {
-      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = getHotelId();
       const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
 
       const payload = {
@@ -683,9 +710,14 @@ export default function ParcelManagement() {
         orderType: 'PARCEL'
       };
 
-      const res = await axios.post(`${API_BASE}/orders${hotelParam}`, payload);
-      if (res.data.success) {
-        const createdOrder = res.data.data;
+      const res = await authorizedFetch(`${API_BASE}/orders${hotelParam}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await parseJsonSafe(res);
+      if (data?.success) {
+        const createdOrder = data.data;
         toast.success(`✅ Parcel order placed for ${selectedTable.table_name}!`);
         if (printKot) {
           printKOT({
@@ -703,12 +735,11 @@ export default function ParcelManagement() {
         fetchOrders();
         return createdOrder;
       } else {
-        throw new Error(res.data.message || 'Failed to send KOT');
+        throw new Error(data?.message || 'Failed to send KOT');
       }
     } catch (err) {
       console.error('[Parcel] handleSendToKot failed:', err);
-      const errMsg = err.response?.data?.message || err.message;
-      toast.error(`❌ ${errMsg}`, {
+      toast.error(`❌ ${err.message}`, {
         style: { borderRadius: '10px', background: '#e11d48', color: '#fff' }
       });
       return null;
@@ -782,8 +813,7 @@ export default function ParcelManagement() {
 
     setIsSubmittingAdditional(true);
     try {
-      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = getHotelId();
       const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
 
       const payload = {
@@ -792,13 +822,15 @@ export default function ParcelManagement() {
       };
 
       const orderId = activeOrderForSelectedTable.id;
-      const res = await axios.put(
-        `${API_BASE}/orders/${orderId}/append-items${hotelParam}`,
-        payload
-      );
+      const res = await authorizedFetch(`${API_BASE}/orders/${orderId}/append-items${hotelParam}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await parseJsonSafe(res);
 
-      if (res.data.success) {
-        const updatedOrderData = res.data.data;
+      if (data?.success) {
+        const updatedOrderData = data.data;
         toast.success('✅ Parcel order updated!');
         const deltaItems = itemsToSubmit
           .filter(item => item.quantity > 0)
@@ -827,7 +859,7 @@ export default function ParcelManagement() {
         fetchOrders();
         return updatedOrderData;
       } else {
-        throw new Error(res.data.message || 'Failed to update KOT');
+        throw new Error(data?.message || 'Failed to update KOT');
       }
     } catch (err) {
       console.error('[Parcel] handleSubmitAdditionalItems failed:', err);
@@ -842,8 +874,7 @@ export default function ParcelManagement() {
 
   const handleCompletePayment = async (orderId, shouldClose = true) => {
     try {
-      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = getHotelId();
 
       if (shouldClose) {
         setSelectedTable(null);
@@ -860,12 +891,12 @@ export default function ParcelManagement() {
           body: JSON.stringify({ paymentMode: selectedPaymentMode || 'CASH' })
         }
       );
-      const data = await res.json();
-      if (data.success) {
+      const data = await parseJsonSafe(res);
+      if (data?.success) {
         fetchTables();
         fetchOrders();
       } else {
-        throw new Error(data.message || 'Failed to complete payment');
+        throw new Error(data?.message || 'Failed to complete payment');
       }
     } catch (err) {
       console.error('[Parcel] handleCompletePayment failed:', err);
@@ -913,15 +944,14 @@ export default function ParcelManagement() {
 
   const handleCancelBill = async (orderId) => {
     try {
-      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = getHotelId();
 
       const res = await authorizedFetch(
         `${API_BASE}/bills/${orderId}/cancel?hotelId=${hotelId}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' } }
       );
-      const data = await res.json();
-      if (data.success) {
+      const data = await parseJsonSafe(res);
+      if (data?.success) {
         toast.success("Parcel order cancelled");
         setSelectedTable(null);
         setIsAddingItems(false);
@@ -930,7 +960,7 @@ export default function ParcelManagement() {
         fetchTables();
         fetchOrders();
       } else {
-        throw new Error(data.message || 'Failed to cancel bill');
+        throw new Error(data?.message || 'Failed to cancel bill');
       }
     } catch (err) {
       console.error('[Parcel] handleCancelBill failed:', err);
@@ -938,7 +968,6 @@ export default function ParcelManagement() {
     }
   };
 
-  // Table Management Actions
   const handleAddTable = async (e) => {
     e.preventDefault();
     if (!formTableNumber.trim()) {
@@ -952,8 +981,8 @@ export default function ParcelManagement() {
     }
 
     const isDuplicate = tables.some(t =>
-      t.section_name?.toUpperCase() === 'PARCEL' &&
-      t.table_number.toUpperCase() === formTableNumber.trim().toUpperCase()
+      (t.section_name ?? t.sectionName ?? '').toString().toUpperCase() === 'PARCEL' &&
+      String(t.table_number ?? t.tableNumber ?? '').toUpperCase() === formTableNumber.trim().toUpperCase()
     );
     if (isDuplicate) {
       toast.error('A parcel table with this code already exists.');
@@ -977,8 +1006,8 @@ export default function ParcelManagement() {
           is_parcel: true
         })
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = await parseJsonSafe(res);
+      if (data?.success) {
         toast.success('Parcel table added successfully!');
         setIsAddTableOpen(false);
         setFormTableNumber('');
@@ -987,7 +1016,7 @@ export default function ParcelManagement() {
         setFormIsActive(true);
         fetchTables();
       } else {
-        throw new Error(data.message || 'Failed to add table');
+        throw new Error(data?.message || 'Failed to add table');
       }
     } catch (err) {
       toast.error(`Error: ${err.message}`);
@@ -1010,8 +1039,8 @@ export default function ParcelManagement() {
     }
 
     const isDuplicate = tables.some(t =>
-      t.section_name?.toUpperCase() === 'PARCEL' &&
-      t.table_number.toUpperCase() === formTableNumber.trim().toUpperCase() &&
+      (t.section_name ?? t.sectionName ?? '').toString().toUpperCase() === 'PARCEL' &&
+      String(t.table_number ?? t.tableNumber ?? '').toUpperCase() === formTableNumber.trim().toUpperCase() &&
       t.id !== editingTable.id
     );
     if (isDuplicate) {
@@ -1035,8 +1064,8 @@ export default function ParcelManagement() {
           is_active: editingTable.is_active !== undefined ? editingTable.is_active : true
         })
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = await parseJsonSafe(res);
+      if (data?.success) {
         toast.success('Parcel table updated successfully!');
         setEditingTable(null);
         setFormTableNumber('');
@@ -1045,7 +1074,7 @@ export default function ParcelManagement() {
         setFormIsActive(true);
         fetchTables();
       } else {
-        throw new Error(data.message || 'Failed to update table');
+        throw new Error(data?.message || 'Failed to update table');
       }
     } catch (err) {
       toast.error(`Error: ${err.message}`);
@@ -1060,12 +1089,12 @@ export default function ParcelManagement() {
       const res = await authorizedFetch(`${API_BASE}/tables/${tableId}`, {
         method: 'DELETE'
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = await parseJsonSafe(res);
+      if (data?.success) {
         toast.success('Parcel table deleted successfully!');
         fetchTables();
       } else {
-        throw new Error(data.message || 'Failed to delete table');
+        throw new Error(data?.message || 'Failed to delete table');
       }
     } catch (err) {
       toast.error(`Error: ${err.message}`);
@@ -1080,7 +1109,6 @@ export default function ParcelManagement() {
     setFormIsActive(table.is_active);
   };
 
-  // Printing logic
   const handleThermalPrint = (billData, existingPrintWindow = null) => {
     const printWindow = existingPrintWindow || window.open('', '_blank', 'width=400,height=600,scrollbars=yes');
     if (!printWindow) {
@@ -1101,9 +1129,9 @@ export default function ParcelManagement() {
       sgst,
       grandTotal,
       serviceCharge = 0,
-      cgstRate,
-      sgstRate,
-      serviceChargeRate,
+      cgstRate: cRate,
+      sgstRate: sRate,
+      serviceChargeRate: scRate,
       phone
     } = billData;
 
@@ -1179,21 +1207,21 @@ export default function ParcelManagement() {
         <td style="text-align: left; padding: 2px 0;">Subtotal</td>
         <td style="text-align: right; padding: 2px 0;">${printCurrency}${parseFloat(subtotal).toFixed(2)}</td>
       </tr>
-      ${cgstRate > 0 ? `
+      ${cRate > 0 ? `
       <tr>
-        <td style="text-align: left; padding: 2px 0; font-size: 10px;">CGST (${cgstRate}%)</td>
+        <td style="text-align: left; padding: 2px 0; font-size: 10px;">CGST (${cRate}%)</td>
         <td style="text-align: right; padding: 2px 0; font-size: 10px;">${printCurrency}${parseFloat(cgst).toFixed(2)}</td>
       </tr>
       ` : ""}
-      ${sgstRate > 0 ? `
+      ${sRate > 0 ? `
       <tr>
-        <td style="text-align: left; padding: 2px 0; font-size: 10px;">SGST (${sgstRate}%)</td>
+        <td style="text-align: left; padding: 2px 0; font-size: 10px;">SGST (${sRate}%)</td>
         <td style="text-align: right; padding: 2px 0; font-size: 10px;">${printCurrency}${parseFloat(sgst).toFixed(2)}</td>
       </tr>
       ` : ""}
       ${Number(serviceCharge) > 0 ? `
       <tr>
-        <td style="text-align: left; padding: 2px 0; font-size: 10px;">Service Charge (${serviceChargeRate}%)</td>
+        <td style="text-align: left; padding: 2px 0; font-size: 10px;">Service Charge (${scRate}%)</td>
         <td style="text-align: right; padding: 2px 0; font-size: 10px;">${printCurrency}${parseFloat(serviceCharge).toFixed(2)}</td>
       </tr>
       ` : ""}
@@ -1235,7 +1263,7 @@ export default function ParcelManagement() {
     }
   };
 
-  const handleThermalPrintDirect = async (table, order, suppressToast = false) => {
+  const handleThermalPrintDirect = async (table, order) => {
     const dateStr = formatDateDDMMYYYY(new Date());
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
@@ -1250,7 +1278,7 @@ export default function ParcelManagement() {
       address: systemSettings.branding.address,
       phone: systemSettings.branding.phone,
       gstNumber: systemSettings.billing.gstNumber,
-      tableNumber: `${table.table_code || table.table_name} (${table.section_name})`,
+      tableNumber: `${table.table_code || table.table_name} (${table.section_name || 'PARCEL'})`,
       cashierName: "Counter",
       captainName: order.captain_name || 'ADMIN',
       orderId: `ORD-${order.id}`,
@@ -1273,22 +1301,21 @@ export default function ParcelManagement() {
     }
 
     try {
-      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = getHotelId();
       const tableName = table.table_code || table.table_name || 'Table';
 
-      const response = await fetch(`${API_BASE}/bills/print?hotelId=${hotelId}`, {
+      const response = await authorizedFetch(`${API_BASE}/bills/print?hotelId=${hotelId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(billData)
       });
-      const data = await response.json();
-      if (!data.success) {
-        if (data.code === 'PRINTER_NOT_CONFIGURED' || data.code === 'PRINTER_OFFLINE') {
+      const data = await parseJsonSafe(response);
+      if (!data?.success) {
+        if (data?.code === 'PRINTER_NOT_CONFIGURED' || data?.code === 'PRINTER_OFFLINE') {
           handleThermalPrint(billData);
           return;
         }
-        throw new Error(data.message || 'Direct print failed');
+        throw new Error(data?.message || 'Direct print failed');
       }
 
       const jobId = data.jobId;
@@ -1318,7 +1345,7 @@ export default function ParcelManagement() {
             onPrintJobAcknowledgedLocal(jobId, tableName, 'BILL');
             return;
           }
-        } catch (localErr) {
+        } catch {
           handleThermalPrint(billData);
           return;
         }
@@ -1328,7 +1355,6 @@ export default function ParcelManagement() {
         fetch('http://127.0.0.1:9111/trigger-poll').catch(() => { });
       }
       onPrintJobAcknowledgedLocal(jobId, tableName, 'BILL');
-
     } catch (err) {
       console.error('Direct print error, opening browser print fallback:', err);
       handleThermalPrint(billData);
@@ -1358,21 +1384,19 @@ export default function ParcelManagement() {
     }
 
     try {
-      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
-
-      const printRes = await fetch(`${API_BASE}/orders/print-kot?hotelId=${hotelId}`, {
+      const hotelId = getHotelId();
+      const printRes = await authorizedFetch(`${API_BASE}/orders/print-kot?hotelId=${hotelId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(kotData)
       });
-      const printData = await printRes.json();
-      if (!printData.success) {
-        if (printData.code === 'PRINTER_NOT_CONFIGURED' || printData.code === 'PRINTER_OFFLINE') {
+      const printData = await parseJsonSafe(printRes);
+      if (!printData?.success) {
+        if (printData?.code === 'PRINTER_NOT_CONFIGURED' || printData?.code === 'PRINTER_OFFLINE') {
           openBrowserPrintKOT(kotData);
           return;
         }
-        throw new Error(printData.message || 'Direct print failed');
+        throw new Error(printData?.message || 'Direct print failed');
       }
 
       const jobId = printData.jobId;
@@ -1398,7 +1422,7 @@ export default function ParcelManagement() {
             localPrintSuccess = true;
             onPrintJobAcknowledgedLocal(jobId, tableName, 'KOT');
           }
-        } catch (localErr) {
+        } catch {
           openBrowserPrintKOT(kotData);
           return;
         }
@@ -1416,8 +1440,6 @@ export default function ParcelManagement() {
   return (
     <AdminLayout>
       <div className="-mt-6 space-y-6 w-full max-w-full overflow-visible">
-        
-        {/* HEADER SECTION */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-white/5">
           <div>
             <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
@@ -1453,7 +1475,6 @@ export default function ParcelManagement() {
           </div>
         </div>
 
-        {/* LOADING & EMPTY STATES */}
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 animate-pulse">
             {[1, 2, 3, 4, 5, 6].map(n => (
@@ -1467,7 +1488,6 @@ export default function ParcelManagement() {
             <p className="text-[11px] font-bold text-slate-400 dark:text-white/20">Click "+ Add Parcel Table" to populate your parcel tables board.</p>
           </div>
         ) : (
-          /* RESPONSIVE PARCEL TABLES GRID */
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 animate-in fade-in duration-300">
             {parcelTables.map((table) => {
               const order = orders.find(o => o.table_id === table.id && o.status !== 'COMPLETED' && o.status !== 'CANCELLED');
@@ -1486,7 +1506,6 @@ export default function ParcelManagement() {
                       : 'bg-slate-50/50 dark:bg-white/2 border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-300 hover:border-slate-300 dark:hover:border-white/10 hover:bg-slate-100/50'
                   }`}
                 >
-                  {/* Top part: Elapsed Time */}
                   <div className="text-[10px] font-black uppercase tracking-wider h-4">
                     {isOccupied && (
                       <DiningTimer
@@ -1495,13 +1514,9 @@ export default function ParcelManagement() {
                       />
                     )}
                   </div>
-
-                  {/* Middle part: Table Name */}
                   <div className="text-2xl font-black tracking-tight my-1">
                     {table.table_name}
                   </div>
-
-                  {/* Bottom part: Amount & Save Icon */}
                   <div className="w-full flex items-center justify-between h-5 text-xs font-black">
                     {isOccupied && order ? (
                       <>
@@ -1520,15 +1535,10 @@ export default function ParcelManagement() {
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════════ */}
-        {/* NEW BILL / ORDER SELECTOR MODAL (Vacant/Add More Flow) */}
-        {/* ════════════════════════════════════════════════════════════════════ */}
         {selectedTableLive && (isCreatingDirectOrder || isAddingItems) && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
             <div className="absolute inset-0" onClick={() => { setSelectedTable(null); closeAddMoreItems(); closeDirectOrder(); }} />
             <div className="relative flex flex-col bg-white dark:bg-[#0d0d0d] border-2 border-slate-100 dark:border-white/5 rounded-3xl shadow-2xl z-10 w-[95vw] h-[90vh] overflow-hidden">
-              
-              {/* Modal Header */}
               <div className="p-4 border-b border-slate-100 dark:border-white/5 flex items-center gap-3 bg-slate-50/50 dark:bg-white/2">
                 <button
                   onClick={isCreatingDirectOrder ? () => { closeDirectOrder(); setSelectedTable(null); } : closeAddMoreItems}
@@ -1556,12 +1566,8 @@ export default function ParcelManagement() {
                 </button>
               </div>
 
-              {/* Modal Body */}
               <div className="flex-1 flex flex-col lg:flex-row overflow-hidden" style={{ minHeight: 0 }}>
-                {/* Left side: Menu items and searches */}
                 <div className="flex-1 flex flex-col overflow-hidden border-r border-slate-100 dark:border-white/5">
-                  
-                  {/* Search and Filters */}
                   <div className="p-4 space-y-2 border-b border-slate-100 dark:border-white/5 flex-shrink-0">
                     <div className="flex gap-2">
                       <div className="relative flex-1">
@@ -1584,7 +1590,7 @@ export default function ParcelManagement() {
                         <option value="VEG">VEG</option>
                         <option value="NON_VEG">NON-VEG</option>
                       </select>
-                      
+
                       <div className="flex bg-slate-100 dark:bg-white/5 p-1 rounded-xl border border-slate-200 dark:border-white/10">
                         <button
                           type="button"
@@ -1610,8 +1616,7 @@ export default function ParcelManagement() {
                         </button>
                       </div>
                     </div>
-                    
-                    {/* Categories selector */}
+
                     <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
                       {menuCategories.map(cat => (
                         <button
@@ -1629,7 +1634,6 @@ export default function ParcelManagement() {
                     </div>
                   </div>
 
-                  {/* Menu Items Grid */}
                   <div className="flex-1 overflow-y-auto p-4 min-h-0 flex flex-col">
                     {menuItems.length === 0 ? (
                       <div className="p-6 text-center text-slate-400 font-bold text-xs">Loading menu...</div>
@@ -1806,7 +1810,6 @@ export default function ParcelManagement() {
                   </div>
                 </div>
 
-                {/* Right side: Selected Items Cart */}
                 <div className="w-full lg:w-96 flex flex-col flex-shrink-0 border-t lg:border-t-0 border-slate-100 dark:border-white/5 bg-slate-50/20 dark:bg-black/10">
                   <div className="p-4 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
                     <span className="text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-widest">Selected Items</span>
@@ -1909,7 +1912,6 @@ export default function ParcelManagement() {
                     )}
                   </div>
 
-                  {/* Cart Footer Checkout Actions */}
                   {additionalItems.length > 0 && (
                     <div className="p-4 border-t border-slate-100 dark:border-white/5 space-y-3 bg-white dark:bg-[#0d0d0d]">
                       <div className="flex justify-between text-xs font-black text-slate-800 dark:text-white">
@@ -1965,7 +1967,6 @@ export default function ParcelManagement() {
                           )}
                         </button>
 
-                        {/* नवीन 'Save, KOT & Bill' बटण */}
                         <button
                           onClick={async () => {
                             let resOrder = null;
@@ -1976,7 +1977,7 @@ export default function ParcelManagement() {
                             }
 
                             if (resOrder && selectedTableLive) {
-                              handleThermalPrintDirect(selectedTableLive, resOrder, false);
+                              handleThermalPrintDirect(selectedTableLive, resOrder);
                             }
                           }}
                           disabled={isCreatingDirectOrder ? isSubmittingDirectOrder : isSubmittingAdditional}
@@ -2000,15 +2001,10 @@ export default function ParcelManagement() {
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════════ */}
-        {/* BILL PREVIEW / PAYMENT modal (Occupied Flow) */}
-        {/* ════════════════════════════════════════════════════════════════════ */}
         {selectedTableLive && !isCreatingDirectOrder && !isAddingItems && checkoutOrder && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
             <div className="absolute inset-0" onClick={() => setSelectedTable(null)} />
             <div className="relative flex flex-col bg-white dark:bg-[#0d0d0d] border border-slate-200 dark:border-white/10 rounded-[2rem] shadow-2xl z-10 w-full max-w-5xl h-[85vh] overflow-hidden">
-              
-              {/* Header bar with close button only */}
               <div className="flex justify-end p-4 pb-0 bg-white dark:bg-[#0d0d0d]">
                 <button
                   onClick={() => setSelectedTable(null)}
@@ -2018,15 +2014,11 @@ export default function ParcelManagement() {
                 </button>
               </div>
 
-              {/* TWO-COLUMN CHECKOUT PANEL */}
               <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-white dark:bg-[#0d0d0d] p-6 gap-6" style={{ minHeight: 0 }}>
-                
-                {/* Left Column: Bill Receipt Summary */}
                 <div className="md:w-[45%] flex flex-col h-full border border-slate-200/60 dark:border-white/5 rounded-2xl bg-slate-50 dark:bg-white/2 p-5 overflow-hidden">
                   <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-white/30 mb-3">Bill Receipt</h3>
                   <div className="flex-1 overflow-y-auto pr-1">
                     <div className="flex flex-col space-y-4 h-full">
-                      {/* Bill Info Grid */}
                       <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-xl p-4">
                         <div className="space-y-1">
                           <span className="text-slate-400 dark:text-white/30 uppercase text-[9px] font-black tracking-wider block">Invoice ID</span>
@@ -2046,7 +2038,6 @@ export default function ParcelManagement() {
                         </div>
                       </div>
 
-                      {/* Ordered Items Table */}
                       <div className="flex-1 bg-white dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-xl overflow-hidden min-h-0 flex flex-col">
                         <div className="overflow-y-auto flex-1">
                           <table className="w-full text-left border-collapse">
@@ -2077,7 +2068,6 @@ export default function ParcelManagement() {
                         </div>
                       </div>
 
-                      {/* Calculations Breakdown */}
                       <div className="space-y-2.5 bg-slate-50 dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-xl p-4 text-xs font-bold text-slate-600 dark:text-slate-300">
                         <div className="flex justify-between">
                           <span className="text-slate-400 uppercase tracking-wider text-[10px]">Subtotal:</span>
@@ -2130,13 +2120,10 @@ export default function ParcelManagement() {
                   </div>
                 </div>
 
-                {/* Right Column: Checkout Controls & Action Buttons */}
                 <div className="flex-1 flex flex-col h-full justify-between border border-slate-200/60 dark:border-white/5 rounded-2xl p-5 bg-white dark:bg-white/[0.01]">
-                  
-                  {/* Top: Payment Mode and Configuration */}
                   <div className="space-y-4">
                     <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-white/30">Checkout Settings</h3>
-                    
+
                     <div className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-white/2 border border-slate-100 dark:border-white/5 rounded-xl">
                       <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Payment Mode</span>
                       <div className="flex gap-1.5">
@@ -2157,9 +2144,7 @@ export default function ParcelManagement() {
                     </div>
                   </div>
 
-                  {/* Bottom: Action Buttons */}
                   <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-white/5">
-                    {/* Row 1: Save, Save & Print, Save & EBill */}
                     <div className="flex flex-col sm:flex-row gap-3">
                       <button
                         onClick={() => setSelectedTable(null)}
@@ -2168,7 +2153,7 @@ export default function ParcelManagement() {
                         Save
                       </button>
                       <button
-                        onClick={() => handleThermalPrintDirect(selectedTableLive, checkoutOrder, false)}
+                        onClick={() => handleThermalPrintDirect(selectedTableLive, checkoutOrder)}
                         className="flex-1 px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                       >
                         Save & Print
@@ -2181,7 +2166,6 @@ export default function ParcelManagement() {
                       </button>
                     </div>
 
-                    {/* Row 2: Cancel Order, New Order */}
                     <div className="flex flex-col sm:flex-row gap-3">
                       <button
                         disabled={checkoutOrder.status === 'COMPLETED'}
@@ -2200,7 +2184,6 @@ export default function ParcelManagement() {
                       </button>
                     </div>
 
-                    {/* Row 3: Settle & Save */}
                     <div className="pt-3 border-t border-slate-100 dark:border-white/5 flex flex-col sm:flex-row justify-between items-center gap-3">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-slate-500 dark:text-white/40 uppercase">Settlement Amount:</span>
@@ -2226,15 +2209,11 @@ export default function ParcelManagement() {
                     </div>
                   </div>
                 </div>
-
               </div>
             </div>
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════════ */}
-        {/* ADD / EDIT TABLE MODAL */}
-        {/* ════════════════════════════════════════════════════════════════════ */}
         {(isAddTableOpen || editingTable) && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
             <div className="absolute inset-0 bg-black/75 backdrop-blur-md" onClick={() => { setIsAddTableOpen(false); setEditingTable(null); }} />
@@ -2282,9 +2261,6 @@ export default function ParcelManagement() {
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════════ */}
-        {/* MANAGE TABLES LIST MODAL */}
-        {/* ════════════════════════════════════════════════════════════════════ */}
         {isManageTablesOpen && (
           <div className="fixed inset-0 z-[90] flex items-center justify-center p-6 animate-in fade-in duration-300">
             <div className="absolute inset-0 bg-black/75 backdrop-blur-md" onClick={() => setIsManageTablesOpen(false)} />
@@ -2345,10 +2321,8 @@ export default function ParcelManagement() {
             </div>
           </div>
         )}
-
       </div>
 
-      {/* Digital E-Bill Receipt Modal */}
       {eBillModalData && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm">
           <div className="relative w-full max-w-md bg-white dark:bg-[#111] border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
