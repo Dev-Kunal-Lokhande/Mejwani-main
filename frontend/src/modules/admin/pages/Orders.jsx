@@ -69,7 +69,7 @@ const getOrderTableId = (order) =>
 const isActiveOrder = (order) => {
   if (!order) return false;
   const st = String(order.status || '').toUpperCase().trim();
-  return !['COMPLETED', 'PAID', 'SETTLED', 'CANCELLED', 'CLOSED'].includes(st);
+  return !['COMPLETED', 'PAID', 'SETTLED', 'CANCELLED', 'CLOSED', 'DONE'].includes(st);
 };
 
 const normalizeTableLabel = (val) =>
@@ -89,6 +89,25 @@ export default function OrdersPage() {
   const [billRequestNotifications, setBillRequestNotifications] = useState([]);
   const tableCardRefs = useRef({});
   const blinkTimerRef = useRef(null);
+  const recentlySettledOrderIdsRef = useRef(new Set());
+  const recentlySettledTableIdsRef = useRef(new Set());
+
+  const markRecentlySettled = useCallback((orderId, tableId) => {
+    if (orderId != null) {
+      const oKey = String(orderId);
+      recentlySettledOrderIdsRef.current.add(oKey);
+      setTimeout(() => {
+        recentlySettledOrderIdsRef.current.delete(oKey);
+      }, 25000);
+    }
+    if (tableId != null) {
+      const tKey = String(tableId);
+      recentlySettledTableIdsRef.current.add(tKey);
+      setTimeout(() => {
+        recentlySettledTableIdsRef.current.delete(tKey);
+      }, 25000);
+    }
+  }, []);
 
   const [printerConfig, setPrinterConfig] = useState(() => {
     try {
@@ -118,6 +137,10 @@ export default function OrdersPage() {
   const findActiveOrderForTable = useCallback(
     (table) => {
       if (!table) return null;
+      if (table.id != null && recentlySettledTableIdsRef.current.has(String(table.id))) {
+        return null;
+      }
+
       const tId = table.id ?? table.table_id ?? null;
       const tLabels = new Set(
         [
@@ -135,6 +158,7 @@ export default function OrdersPage() {
 
       return (
         orders.find((o) => {
+          if (o?.id != null && recentlySettledOrderIdsRef.current.has(String(o.id))) return false;
           if (!isActiveOrder(o)) return false;
           const oTableId = getOrderTableId(o);
           if (tId != null && oTableId != null && String(oTableId) === String(tId)) return true;
@@ -161,6 +185,9 @@ export default function OrdersPage() {
   const isTableOccupiedOrBusy = useCallback(
     (table) => {
       if (!table) return false;
+      if (table.id != null && recentlySettledTableIdsRef.current.has(String(table.id))) {
+        return false;
+      }
       const st = String(table.status || '').toLowerCase().trim();
       if (['occupied', 'busy', 'bill_pending', 'running', 'active'].includes(st)) {
         return true;
@@ -173,6 +200,10 @@ export default function OrdersPage() {
   const getTableFallbackOrder = useCallback(
     (table) => {
       if (!table) return null;
+      if (table.id != null && recentlySettledTableIdsRef.current.has(String(table.id))) {
+        return null;
+      }
+
       const fromOrders = findActiveOrderForTable(table);
       if (fromOrders) return fromOrders;
 
@@ -185,6 +216,10 @@ export default function OrdersPage() {
         null;
 
       if (embeddedOrder && isActiveOrder(embeddedOrder)) {
+        const embId = embeddedOrder.id ?? embeddedOrder.order_id ?? embeddedOrder._id;
+        if (embId != null && recentlySettledOrderIdsRef.current.has(String(embId))) {
+          return null;
+        }
         const amount = Number(
           embeddedOrder.grand_total ??
             embeddedOrder.total ??
@@ -195,7 +230,7 @@ export default function OrdersPage() {
         );
         return {
           ...embeddedOrder,
-          id: embeddedOrder.id ?? embeddedOrder.order_id ?? embeddedOrder._id ?? `TBL-${table.id}`,
+          id: embId ?? `TBL-${table.id}`,
           table_id: getOrderTableId(embeddedOrder) ?? table.id,
           table_name: embeddedOrder.table_name || table.table_name,
           items: Array.isArray(embeddedOrder.items) ? embeddedOrder.items : [],
@@ -884,6 +919,11 @@ export default function OrdersPage() {
 
       if (res.data.success) {
         const newOrder = res.data.data;
+        recentlySettledTableIdsRef.current.delete(String(selectedTable.id));
+        if (newOrder?.id != null) {
+          recentlySettledOrderIdsRef.current.delete(String(newOrder.id));
+        }
+
         setOrders((prev) => [
           ...prev,
           {
@@ -936,9 +976,21 @@ export default function OrdersPage() {
 
       const tablesData = await tablesRes.json();
       if (tablesData.success) {
-        const fetchedTables = (tablesData.data || []).filter(
-          (t) => String(t.section_name ?? t.sectionName ?? '').toUpperCase() !== 'PARCEL'
-        );
+        const fetchedTables = (tablesData.data || [])
+          .filter((t) => String(t.section_name ?? t.sectionName ?? '').toUpperCase() !== 'PARCEL')
+          .map((t) =>
+            t.id != null && recentlySettledTableIdsRef.current.has(String(t.id))
+              ? {
+                  ...t,
+                  status: 'available',
+                  occupied_at: null,
+                  currentOrder: null,
+                  current_order: null,
+                  current_amount: 0,
+                  order_total: 0
+                }
+              : t
+          );
         setTables(fetchedTables);
       }
     } catch (err) {
@@ -964,7 +1016,12 @@ export default function OrdersPage() {
           : Array.isArray(ordersData.data?.orders)
           ? ordersData.data.orders
           : [];
-        setOrders(rawList);
+        const normalizedList = rawList.map((o) =>
+          o?.id != null && recentlySettledOrderIdsRef.current.has(String(o.id))
+            ? { ...o, status: 'COMPLETED' }
+            : o
+        );
+        setOrders(normalizedList);
       }
     } catch (err) {
       console.error('[Orders] Fetch orders issue:', err);
@@ -1412,8 +1469,11 @@ export default function OrdersPage() {
     } else {
       setCheckoutOrder((prev) => {
         if (prev && String(getOrderTableId(prev)) === String(selectedTableLive.id)) {
+          if (recentlySettledOrderIdsRef.current.has(String(prev.id))) {
+            return null;
+          }
           const latestVersion = orders.find((o) => String(o.id) === String(prev.id));
-          if (latestVersion) return latestVersion;
+          if (latestVersion && isActiveOrder(latestVersion)) return latestVersion;
         }
         return null;
       });
@@ -1472,6 +1532,9 @@ export default function OrdersPage() {
       const targetOrder = orders.find((ord) => String(ord.id) === String(orderId)) || checkoutOrder;
       const targetTableId = getOrderTableId(targetOrder) ?? selectedTableLive?.id ?? null;
 
+      markRecentlySettled(orderId, targetTableId);
+      setCheckoutOrder(null);
+
       setTables((prev) =>
         prev.map((t) => {
           const matchesId = targetTableId != null && String(t.id) === String(targetTableId);
@@ -1479,6 +1542,7 @@ export default function OrdersPage() {
             targetOrder?.table_name &&
             normalizeTableLabel(t.table_name) === normalizeTableLabel(targetOrder.table_name);
           if (matchesId || matchesName) {
+            if (t.id != null) markRecentlySettled(null, t.id);
             return {
               ...t,
               status: 'available',
@@ -1856,6 +1920,10 @@ export default function OrdersPage() {
   };
 
   const getTableDisplayStatus = (table) => {
+    if (table?.id != null && recentlySettledTableIdsRef.current.has(String(table.id))) {
+      return 'available';
+    }
+
     const order = findActiveOrderForTable(table);
     if (order) {
       const oStatus = String(order.status || '').toUpperCase();
