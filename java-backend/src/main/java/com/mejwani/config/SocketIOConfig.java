@@ -4,8 +4,8 @@ import com.corundumstudio.socketio.Configuration;
 import com.corundumstudio.socketio.SocketIOServer;
 import com.corundumstudio.socketio.listener.ConnectListener;
 import com.corundumstudio.socketio.listener.DisconnectListener;
-import org.springframework.context.annotation.Bean;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
 
 @org.springframework.context.annotation.Configuration
 public class SocketIOConfig {
@@ -13,13 +13,16 @@ public class SocketIOConfig {
     @Value("${frontend.url:http://localhost:5173}")
     private String frontendUrl;
 
+    @Value("${socketio.port:9001}")
+    private int socketPort;
+
     @Bean
     public SocketIOServer socketIOServer() {
         Configuration config = new Configuration();
         config.setHostname("0.0.0.0");
-        config.setPort(9001);
+        config.setPort(socketPort);
         config.setContext("/socket.io");
-        config.setOrigin("*");
+        config.setOrigin(frontendUrl);
 
         SocketIOServer server = new SocketIOServer(config);
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Printer,
@@ -35,14 +36,18 @@ const isLocalNetworkHost = () => {
   );
 };
 
-const showPrinterErrorToast = (message, toastId) => {
+const showPrinterErrorToast = (message, toastId, navigate) => {
   toast.error(
     (t) => (
       <div
         className="flex flex-col gap-1 cursor-pointer"
         onClick={() => {
           toast.dismiss(t.id);
-          window.location.href = '/admin/settings?tab=printer';
+          if (navigate) {
+            navigate('/admin/settings?tab=printer');
+          } else {
+            window.location.hash = '#/admin/settings?tab=printer';
+          }
         }}
       >
         <span className="font-bold text-sm">❌ {message}</span>
@@ -58,6 +63,8 @@ const showPrinterErrorToast = (message, toastId) => {
 };
 
 export default function OrdersPage() {
+  const navigate = useNavigate();
+
   // Sync state
   const [tables, setTables] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -616,7 +623,7 @@ export default function OrdersPage() {
       const printData = await printRes.json();
       if (!printData.success) {
         if (printData.code === 'PRINTER_NOT_CONFIGURED' || printData.code === 'PRINTER_OFFLINE') {
-          showPrinterErrorToast(printData.message, `kot-manual-fail-${order.id}`);
+          showPrinterErrorToast(printData.message, `kot-manual-fail-${order.id}`, navigate);
           return;
         }
         throw new Error(printData.message || 'Direct print request failed');
@@ -1028,7 +1035,7 @@ export default function OrdersPage() {
         const printData = await printRes.json();
         if (!printData.success) {
           if (printData.code === 'PRINTER_NOT_CONFIGURED' || printData.code === 'PRINTER_OFFLINE') {
-            showPrinterErrorToast(printData.message, `kot-auto-fail-${order.id}`);
+            showPrinterErrorToast(printData.message, `kot-auto-fail-${order.id}`, navigate);
             printingKotIds.current.delete(order.id);
             return;
           }
@@ -1074,7 +1081,7 @@ export default function OrdersPage() {
         });
       }
     });
-  }, [orders, systemSettings, startAckTimeout, onPrintJobAcknowledgedLocal, syncOperationalState]);
+  }, [orders, systemSettings, startAckTimeout, onPrintJobAcknowledgedLocal, syncOperationalState, navigate]);
 
   const selectedTableLive = useMemo(() => {
     if (!selectedTable) return null;
@@ -1604,13 +1611,14 @@ export default function OrdersPage() {
       <div className="-mt-6 space-y-4 w-full max-w-full overflow-visible">
         {/* Issued Bills Option */}
         <div className="flex justify-end items-center mb-1">
-          <a
-            href="/admin/bills"
+          <button
+            type="button"
+            onClick={() => navigate('/admin/bills')}
             className="flex items-center gap-2 px-4.5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/10 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
           >
             <Receipt className="w-4 h-4" />
             Issued Bills
-          </a>
+          </button>
         </div>
 
         {/* Dashboard layout */}
@@ -1651,18 +1659,20 @@ export default function OrdersPage() {
                   you need to set up your restaurant tables first.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 mt-8">
-                  <a
-                    href="/admin/tables"
+                  <button
+                    type="button"
+                    onClick={() => navigate('/admin/tables')}
                     className="px-6 py-3 bg-[#ff6b00] hover:bg-[#e66000] text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-lg shadow-orange-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
                     Configure Tables <Plus className="w-4 h-4" />
-                  </a>
-                  <a
-                    href="/admin/hotel-menu"
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/admin/hotel-menu')}
                     className="px-6 py-3 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-white rounded-xl font-black text-xs uppercase tracking-wider hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
                   >
                     Set Up Hotel Menu
-                  </a>
+                  </button>
                 </div>
               </div>
             ) : (
@@ -1712,6 +1722,7 @@ export default function OrdersPage() {
                             <div className="text-[10px] font-black uppercase tracking-wider min-h-[16px] w-full flex justify-center">
                               {isCustomerPresent ? (
                                 <button
+                                  type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleRejectRequest(table);
@@ -1780,6 +1791,7 @@ export default function OrdersPage() {
                     {/* Header */}
                     <div className="p-5 border-b border-slate-100 dark:border-white/5 flex items-center gap-3 bg-slate-50/50 dark:bg-white/2">
                       <button
+                        type="button"
                         onClick={
                           isCreatingDirectOrder
                             ? () => {
@@ -1788,7 +1800,7 @@ export default function OrdersPage() {
                               }
                             : closeAddMoreItems
                         }
-                        className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl text-slate-400 hover:text-slate-600 transition-all flex-shrink-0"
+                        className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl text-slate-400 hover:text-slate-600 transition-all flex-shrink-0 cursor-pointer"
                       >
                         <ChevronLeft className="w-5 h-5" />
                       </button>
@@ -1804,6 +1816,7 @@ export default function OrdersPage() {
                         </p>
                       </div>
                       <button
+                        type="button"
                         onClick={
                           isCreatingDirectOrder
                             ? () => {
@@ -1815,7 +1828,7 @@ export default function OrdersPage() {
                                 closeAddMoreItems();
                               }
                         }
-                        className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl text-slate-400 hover:text-slate-600 transition-all"
+                        className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl text-slate-400 hover:text-slate-600 transition-all cursor-pointer"
                       >
                         <X className="w-5 h-5" />
                       </button>
@@ -1876,9 +1889,10 @@ export default function OrdersPage() {
                           <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1 scrollbar-thin">
                             {menuCategories.map((cat) => (
                               <button
+                                type="button"
                                 key={cat}
                                 onClick={() => setMenuCategoryFilter(cat)}
-                                className={`min-w-max px-3 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                                className={`min-w-max px-3 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
                                   menuCategoryFilter === cat
                                     ? 'bg-[#ff6b00] text-white shadow-md shadow-orange-500/20'
                                     : 'bg-white dark:bg-[#111] border border-slate-200 dark:border-white/10 text-slate-600 dark:text-white/60 hover:bg-slate-100 dark:hover:bg-white/5'
@@ -2113,8 +2127,9 @@ export default function OrdersPage() {
                           </span>
                           {additionalItems.length > 0 && (
                             <button
+                              type="button"
                               onClick={() => setAdditionalItems([])}
-                              className="text-[9px] font-bold text-rose-500 hover:underline flex items-center gap-1"
+                              className="text-[9px] font-bold text-rose-500 hover:underline flex items-center gap-1 cursor-pointer"
                             >
                               <Trash2 className="w-3 h-3" /> Clear
                             </button>
@@ -2205,6 +2220,7 @@ export default function OrdersPage() {
                                       <td className="py-2.5 text-center">
                                         <div className="inline-flex items-center gap-1 bg-slate-50 dark:bg-white/5 p-0.5 rounded-lg border border-slate-200 dark:border-white/5">
                                           <button
+                                            type="button"
                                             onClick={() => handleAdditionalQuantity(item.cartId, -1)}
                                             className="p-0.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer"
                                           >
@@ -2214,6 +2230,7 @@ export default function OrdersPage() {
                                             {item.quantity}
                                           </span>
                                           <button
+                                            type="button"
                                             onClick={() => handleAdditionalQuantity(item.cartId, 1)}
                                             className="p-0.5 rounded text-[#ff6b00] hover:bg-orange-500/10 cursor-pointer"
                                           >
@@ -2248,6 +2265,7 @@ export default function OrdersPage() {
                             </div>
                             <div className="flex gap-2">
                               <button
+                                type="button"
                                 onClick={() => {
                                   if (isCreatingDirectOrder) {
                                     handleCreateDirectOrder({ printKot: false });
@@ -2258,7 +2276,7 @@ export default function OrdersPage() {
                                 disabled={
                                   isCreatingDirectOrder ? isSubmittingDirectOrder : isSubmittingAdditional
                                 }
-                                className="flex-1 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                                className="flex-1 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
                               >
                                 {(isCreatingDirectOrder ? isSubmittingDirectOrder : isSubmittingAdditional) ? (
                                   <span className="animate-pulse">Saving...</span>
@@ -2270,6 +2288,7 @@ export default function OrdersPage() {
                                 )}
                               </button>
                               <button
+                                type="button"
                                 onClick={() => {
                                   if (isCreatingDirectOrder) {
                                     handleCreateDirectOrder({ printKot: true });
@@ -2280,7 +2299,7 @@ export default function OrdersPage() {
                                 disabled={
                                   isCreatingDirectOrder ? isSubmittingDirectOrder : isSubmittingAdditional
                                 }
-                                className="flex-1 py-3 bg-[#ff6b00] hover:bg-[#e66000] text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                                className="flex-1 py-3 bg-[#ff6b00] hover:bg-[#e66000] text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
                               >
                                 {(isCreatingDirectOrder ? isSubmittingDirectOrder : isSubmittingAdditional) ? (
                                   <span className="animate-pulse">KOT...</span>
@@ -2302,8 +2321,9 @@ export default function OrdersPage() {
                     {/* DEFAULT BILLING MODAL VIEW */}
                     <div className="flex justify-end p-4 pb-0 bg-white dark:bg-[#0d0d0d]">
                       <button
+                        type="button"
                         onClick={() => setSelectedTable(null)}
-                        className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl text-slate-400 hover:text-slate-600 transition-all"
+                        className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl text-slate-400 hover:text-slate-600 transition-all cursor-pointer"
                       >
                         <X className="w-6 h-6" />
                       </button>
@@ -2377,7 +2397,7 @@ export default function OrdersPage() {
                                               </span>
                                               {item.note && (
                                                 <span className="text-[9px] text-amber-500 italic block mt-0.5">
-                                                  * Note: {item.note}
+                                                  - Note: {item.note}
                                                 </span>
                                               )}
                                             </td>
@@ -2479,6 +2499,7 @@ export default function OrdersPage() {
                               <div className="flex gap-1.5">
                                 {['CASH', 'UPI', 'CARD'].map((mode) => (
                                   <button
+                                    type="button"
                                     key={mode}
                                     onClick={() => setSelectedPaymentMode(mode)}
                                     className={`px-4 py-2 text-[10px] font-black rounded-lg cursor-pointer transition-all ${
@@ -2500,18 +2521,21 @@ export default function OrdersPage() {
                           <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-white/5">
                             <div className="flex flex-col sm:flex-row gap-3">
                               <button
+                                type="button"
                                 onClick={() => setSelectedTable(null)}
-                                className="flex-1 px-4 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                className="flex-1 px-4 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                               >
                                 Save
                               </button>
                               <button
+                                type="button"
                                 onClick={() => printThermalBill(selectedTableLive, checkoutOrder)}
                                 className="flex-1 px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                               >
                                 Save & Print
                               </button>
                               <button
+                                type="button"
                                 onClick={() => handleSaveAndEBill(selectedTableLive, checkoutOrder)}
                                 className="flex-1 px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                               >
@@ -2521,6 +2545,7 @@ export default function OrdersPage() {
 
                             <div className="flex flex-col sm:flex-row gap-3">
                               <button
+                                type="button"
                                 disabled={checkoutOrder.status === 'COMPLETED'}
                                 onClick={() => handleCancelBill(checkoutOrder.id)}
                                 className="flex-1 px-4 py-3 bg-slate-500 hover:bg-slate-600 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2528,6 +2553,7 @@ export default function OrdersPage() {
                                 Cancel Order
                               </button>
                               <button
+                                type="button"
                                 disabled={checkoutOrder.status === 'COMPLETED'}
                                 onClick={openAddMoreItems}
                                 className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/50 text-emerald-600 dark:text-emerald-400 rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2547,6 +2573,7 @@ export default function OrdersPage() {
                                 </span>
                               </div>
                               <button
+                                type="button"
                                 onClick={() => {
                                   if (checkoutOrder.status === 'COMPLETED') {
                                     setSelectedTable(null);
@@ -2567,12 +2594,14 @@ export default function OrdersPage() {
                           <div className="space-y-3">
                             <div className="flex justify-center flex-col sm:flex-row gap-3">
                               <button
+                                type="button"
                                 disabled={true}
                                 className="flex-1 px-4 py-3 bg-emerald-600/50 text-white rounded-2xl text-xs font-black uppercase tracking-wider opacity-50 cursor-not-allowed"
                               >
                                 SAVE & SETTLE
                               </button>
                               <button
+                                type="button"
                                 disabled={true}
                                 className="flex-1 px-4 py-3 bg-[#ff6b00]/50 text-white rounded-2xl text-xs font-black opacity-50 cursor-not-allowed"
                               >
@@ -2597,8 +2626,9 @@ export default function OrdersPage() {
           <div className="relative w-full max-w-md bg-white dark:bg-[#111] border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="bg-emerald-600 text-white p-5 text-center relative">
               <button
+                type="button"
                 onClick={() => setEBillModalData(null)}
-                className="absolute right-4 top-4 p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+                className="absolute right-4 top-4 p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2666,29 +2696,31 @@ export default function OrdersPage() {
               </div>
 
               <div className="pt-2 flex gap-3">
-               <button
-  type="button"
-  onClick={() => {
-    const encodedData = window.btoa(unescape(encodeURIComponent(JSON.stringify(eBillModalData))));
-    const eBillUrl = `${window.location.origin}/ebill?data=${encodedData}`;
-    const msg = `*${eBillModalData.hotelName} - Digital E-Bill* 🧾\n\nInvoice: ${eBillModalData.invoiceId}\nTable: ${eBillModalData.tableName}\nTotal Paid: *₹${eBillModalData.grandTotal.toFixed(2)}*\n\n👇 View & Download your E-Bill:\n${eBillUrl}\n\nThank you for dining with us!`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-  }}
-  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer"
->
-  Share on WhatsApp
-</button>
                 <button
                   type="button"
-                  onClick={() => openBrowserPrintReceipt({
-                    ...eBillModalData,
-                    orderId: eBillModalData.invoiceId,
-                    tableNumber: eBillModalData.tableName,
-                    cgstRate,
-                    sgstRate,
-                    serviceChargeRate,
-                    currencySymbol: systemSettings.billing.currencySymbol
-                  })}
+                  onClick={() => {
+                    const encodedData = window.btoa(unescape(encodeURIComponent(JSON.stringify(eBillModalData))));
+                    const eBillUrl = `${window.location.origin}/#/ebill?data=${encodedData}`;
+                    const msg = `*${eBillModalData.hotelName} - Digital E-Bill* 🧾\n\nInvoice: ${eBillModalData.invoiceId}\nTable: ${eBillModalData.tableName}\nTotal Paid: *₹${eBillModalData.grandTotal.toFixed(2)}*\n\n👇 View & Download your E-Bill:\n${eBillUrl}\n\nThank you for dining with us!`;
+                    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+                  }}
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer"
+                >
+                  Share on WhatsApp
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    openBrowserPrintReceipt({
+                      ...eBillModalData,
+                      orderId: eBillModalData.invoiceId,
+                      tableNumber: eBillModalData.tableName,
+                      cgstRate,
+                      sgstRate,
+                      serviceChargeRate,
+                      currencySymbol: systemSettings.billing.currencySymbol
+                    })
+                  }
                   className="px-5 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer"
                 >
                   Print / PDF

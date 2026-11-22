@@ -14,15 +14,23 @@ public class SocketIOServerRunner implements SmartLifecycle {
 
     @Override
     public void start() {
-        server.start();
-        running = true;
-        System.out.println("[SOCKET.IO] Server started on port 8080/socket.io");
+        try {
+            server.start();
+            running = true;
+            System.out.println("[SOCKET.IO] Server started on port " + server.getConfiguration().getPort() + server.getConfiguration().getContext());
+        } catch (Exception e) {
+            running = false;
+            System.err.println("[SOCKET.IO] Failed to start server: " + e.getMessage());
+        }
     }
 
     @Override
     public void stop() {
-        server.stop();
-        running = false;
+        try {
+            server.stop();
+        } finally {
+            running = false;
+        }
     }
 
     @Override
