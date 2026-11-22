@@ -169,8 +169,53 @@ export default function AdminLayout({ children }) {
   }, [adminUser?.hotel_id]);
 
   useEffect(() => {
-    return subscribeRealtimeAlerts(socket);
-  }, []);
+    const unsubscribe = subscribeRealtimeAlerts(socket);
+
+    const handleFinalBillEvent = (payload = {}) => {
+      const captainName =
+        payload.captainName ||
+        payload.captain_name ||
+        payload.requestedBy ||
+        payload.captain ||
+        'Captain';
+      const tableName =
+        payload.tableName ||
+        payload.table_name ||
+        payload.tableNumber ||
+        payload.table ||
+        'Table';
+      const tableId = payload.tableId ?? payload.table_id ?? null;
+
+      window.dispatchEvent(
+        new CustomEvent('mejwani:final-bill-request', {
+          detail: { ...payload, captainName, tableName, tableId }
+        })
+      );
+
+      if (typeof notifCtx?.addNotification === 'function') {
+        notifCtx.addNotification({
+          title: `Final Bill Request · ${tableName}`,
+          message: `Requested by ${captainName}`,
+          targetRoute: '/admin/orders',
+          tableId,
+          tableName
+        });
+      }
+    };
+
+    socket.on('final-bill-request', handleFinalBillEvent);
+    socket.on('bill-requested', handleFinalBillEvent);
+    socket.on('request-final-bill', handleFinalBillEvent);
+    socket.on('captain-bill-request', handleFinalBillEvent);
+
+    return () => {
+      unsubscribe?.();
+      socket.off('final-bill-request', handleFinalBillEvent);
+      socket.off('bill-requested', handleFinalBillEvent);
+      socket.off('request-final-bill', handleFinalBillEvent);
+      socket.off('captain-bill-request', handleFinalBillEvent);
+    };
+  }, [notifCtx]);
 
   // =========================================
   // LOGOUT
@@ -197,13 +242,22 @@ export default function AdminLayout({ children }) {
     }
     setBellOpen(false);
 
-    // Navigate directly to the relevant page
     const isParcel = String(note.title || note.message || '').toLowerCase().includes('parcel');
-    if (note.targetRoute) {
-      navigate(isParcel ? '/admin/parcel' : note.targetRoute);
-    } else {
-      navigate(isParcel ? '/admin/parcel' : '/admin/orders');
+    const target = isParcel ? '/admin/parcel' : (note.targetRoute || '/admin/orders');
+
+    if (!isParcel && (note.tableId != null || note.tableName)) {
+      window.dispatchEvent(
+        new CustomEvent('mejwani:final-bill-request', {
+          detail: {
+            tableId: note.tableId ?? null,
+            tableName: note.tableName || '',
+            captainName: note.captainName || 'Captain'
+          }
+        })
+      );
     }
+
+    navigate(target);
   };
 
   return (
