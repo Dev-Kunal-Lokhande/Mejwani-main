@@ -1,9 +1,12 @@
 package com.mejwani.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mejwani.entity.*;
-import com.mejwani.repository.*;
+import com.mejwani.entity.Admin;
+import com.mejwani.entity.Hotel;
+import com.mejwani.repository.AdminRepository;
+import com.mejwani.repository.HotelRepository;
 import com.mejwani.security.JwtUtil;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -14,10 +17,12 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 @RestController
@@ -29,18 +34,25 @@ public class SuperAdminController {
     private final HotelRepository hotelRepository;
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${upload.dir:uploads}")
     private String uploadDir;
 
-    private final Map<String, Object> platformSettings = initDefaultSettings();
-    private final AtomicLong paymentSeq = new AtomicLong(1001);
-    private final List> paymentRecords = Collections.synchronizedList(new ArrayList<>());
-    private final Map<String, byte[]> backupSnapshots = new ConcurrentHashMap<>();
-    private final List> backupMetadataList = Collections.synchronizedList(new ArrayList<>());
+    private ObjectMapper objectMapper;
+    private Map<String, Object> platformSettings;
+    private AtomicLong paymentSeq;
+    private List<Map<String, Object>> paymentRecords;
+    private Map<String, byte[]> backupSnapshots;
+    private List<Map<String, Object>> backupMetadataList;
 
-    private static Map<String, Object> initDefaultSettings() {
+    @PostConstruct
+    public void initStores() {
+        this.objectMapper = new ObjectMapper();
+        this.paymentSeq = new AtomicLong(1001);
+        this.paymentRecords = Collections.synchronizedList(new ArrayList<>());
+        this.backupSnapshots = new HashMap<>();
+        this.backupMetadataList = Collections.synchronizedList(new ArrayList<>());
+
         Map<String, Object> smtp = new HashMap<>();
         smtp.put("host", "");
         smtp.put("port", "587");
@@ -49,13 +61,13 @@ public class SuperAdminController {
         smtp.put("sender_email", "");
         smtp.put("secure", false);
 
-        Map<String, Object> settings = new ConcurrentHashMap<>();
+        Map<String, Object> settings = new HashMap<>();
         settings.put("brandingLogo", "");
         settings.put("platformName", "Mejwani Command Center");
         settings.put("supportEmail", "support@mejwani.com");
         settings.put("supportPhone", "");
         settings.put("smtpSettings", smtp);
-        return settings;
+        this.platformSettings = settings;
     }
 
     @PostMapping("/login")
@@ -129,7 +141,7 @@ public class SuperAdminController {
 
     @GetMapping("/hotels")
     public ResponseEntity<?> getAllHotels() {
-        List> hotels = hotelRepository.findAll().stream()
+        List<Map<String, Object>> hotels = hotelRepository.findAll().stream()
                 .map(this::serializeHotel).toList();
         return ResponseEntity.ok(Map.of("success", true, "data", hotels));
     }
@@ -289,7 +301,7 @@ public class SuperAdminController {
 
     @GetMapping("/admins")
     public ResponseEntity<?> getAllAdmins() {
-        List> admins = adminRepository.findAll().stream()
+        List<Map<String, Object>> admins = adminRepository.findAll().stream()
                 .map(this::serializeAdmin).toList();
         return ResponseEntity.ok(Map.of("success", true, "data", admins));
     }
@@ -366,7 +378,7 @@ public class SuperAdminController {
             }
         }
 
-        List> recentHotels = allHotels.stream()
+        List<Map<String, Object>> recentHotels = allHotels.stream()
                 .map(this::serializeHotel).toList();
 
         Map<String, Object> metrics = new HashMap<>();
@@ -412,14 +424,14 @@ public class SuperAdminController {
 
     @GetMapping("/billing")
     public ResponseEntity<?> getBilling() {
-        List> activeHotelsList = hotelRepository.findAll().stream()
+        List<Map<String, Object>> activeHotelsList = hotelRepository.findAll().stream()
                 .filter(h -> !"suspended".equalsIgnoreCase(h.getStatus()))
                 .map(this::serializeHotel)
                 .toList();
 
         double totalBilled = 0;
         double pendingBilled = 0;
-        List> paymentsCopy;
+        List<Map<String, Object>> paymentsCopy;
         synchronized (paymentRecords) {
             paymentsCopy = new ArrayList<>(paymentRecords);
             for (Map<String, Object> p : paymentsCopy) {
