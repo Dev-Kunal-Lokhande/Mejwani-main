@@ -87,54 +87,55 @@ public class ParcelOrderController {
                         : "CASH")
                 .build();
 
-        @SuppressWarnings("unchecked")
-        List> itemsData = body.get("items") instanceof List<?> rawList
-                ? (List>) rawList
-                : List.of();
-
         List<ParcelOrderItem> items = new ArrayList<>();
         BigDecimal total = BigDecimal.ZERO;
 
-        for (Map<String, Object> itemData : itemsData) {
-            if (itemData == null) continue;
+        Object rawItems = body.get("items");
+        if (rawItems instanceof List<?>) {
+            @SuppressWarnings("unchecked")
+            List> itemsData = (List>) rawItems;
 
-            ParcelOrderItem poi = new ParcelOrderItem();
-            poi.setParcelOrder(order);
+            for (Map<String, Object> itemData : itemsData) {
+                if (itemData == null) continue;
 
-            int qty = itemData.get("quantity") != null
-                    ? Integer.parseInt(itemData.get("quantity").toString().trim())
-                    : 1;
-            poi.setQuantity(Math.max(1, qty));
+                ParcelOrderItem poi = new ParcelOrderItem();
+                poi.setParcelOrder(order);
 
-            Object rawMenuItemId = itemData.get("menuItemId");
-            if (rawMenuItemId != null && !rawMenuItemId.toString().isBlank()) {
-                Long menuItemId = Long.valueOf(rawMenuItemId.toString().trim());
-                menuItemRepository.findById(menuItemId).ifPresentOrElse(
-                        mi -> {
-                            poi.setMenuItem(mi);
-                            poi.setItemName(mi.getName());
-                            poi.setUnitPrice(mi.getPrice() != null ? mi.getPrice() : BigDecimal.ZERO);
-                        },
-                        () -> {
-                            poi.setItemName(Objects.toString(itemData.get("itemName"), "Item"));
-                            BigDecimal fallbackPrice = itemData.get("unitPrice") != null && !itemData.get("unitPrice").toString().isBlank()
-                                    ? new BigDecimal(itemData.get("unitPrice").toString().trim())
-                                    : BigDecimal.ZERO;
-                            poi.setUnitPrice(fallbackPrice);
-                        }
-                );
-            } else {
-                poi.setItemName(Objects.toString(itemData.get("itemName"), "Item"));
-                BigDecimal unitPrice = itemData.get("unitPrice") != null && !itemData.get("unitPrice").toString().isBlank()
-                        ? new BigDecimal(itemData.get("unitPrice").toString().trim())
-                        : BigDecimal.ZERO;
-                poi.setUnitPrice(unitPrice);
+                int qty = itemData.get("quantity") != null && !itemData.get("quantity").toString().isBlank()
+                        ? Integer.parseInt(itemData.get("quantity").toString().trim())
+                        : 1;
+                poi.setQuantity(Math.max(1, qty));
+
+                Object rawMenuItemId = itemData.get("menuItemId");
+                if (rawMenuItemId != null && !rawMenuItemId.toString().isBlank()) {
+                    Long menuItemId = Long.valueOf(rawMenuItemId.toString().trim());
+                    menuItemRepository.findById(menuItemId).ifPresentOrElse(
+                            mi -> {
+                                poi.setMenuItem(mi);
+                                poi.setItemName(mi.getName());
+                                poi.setUnitPrice(mi.getPrice() != null ? mi.getPrice() : BigDecimal.ZERO);
+                            },
+                            () -> {
+                                poi.setItemName(Objects.toString(itemData.get("itemName"), "Item"));
+                                BigDecimal fallbackPrice = itemData.get("unitPrice") != null && !itemData.get("unitPrice").toString().isBlank()
+                                        ? new BigDecimal(itemData.get("unitPrice").toString().trim())
+                                        : BigDecimal.ZERO;
+                                poi.setUnitPrice(fallbackPrice);
+                            }
+                    );
+                } else {
+                    poi.setItemName(Objects.toString(itemData.get("itemName"), "Item"));
+                    BigDecimal unitPrice = itemData.get("unitPrice") != null && !itemData.get("unitPrice").toString().isBlank()
+                            ? new BigDecimal(itemData.get("unitPrice").toString().trim())
+                            : BigDecimal.ZERO;
+                    poi.setUnitPrice(unitPrice);
+                }
+
+                if (poi.getUnitPrice() != null && poi.getQuantity() != null) {
+                    total = total.add(poi.getUnitPrice().multiply(BigDecimal.valueOf(poi.getQuantity())));
+                }
+                items.add(poi);
             }
-
-            if (poi.getUnitPrice() != null && poi.getQuantity() != null) {
-                total = total.add(poi.getUnitPrice().multiply(BigDecimal.valueOf(poi.getQuantity())));
-            }
-            items.add(poi);
         }
 
         order.setItems(items);
