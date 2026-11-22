@@ -12,7 +12,8 @@ import {
   PackagePlus,
   Trash2,
   Save,
-  Receipt
+  Receipt,
+  BellRing
 } from 'lucide-react';
 import AdminLayout from '../../../shared/layouts/AdminLayout';
 import socket from '../../../shared/services/socketClient';
@@ -84,6 +85,11 @@ export default function OrdersPage() {
 
   const [tables, setTables] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [blinkingTableId, setBlinkingTableId] = useState(null);
+  const [billRequestNotifications, setBillRequestNotifications] = useState([]);
+  const tableCardRefs = useRef({});
+  const blinkTimerRef = useRef(null);
+
   const [printerConfig, setPrinterConfig] = useState(() => {
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
@@ -696,7 +702,8 @@ export default function OrdersPage() {
     setMenuSearchTerm('');
   };
 
-  const handleSelectTableCard = async (table) => {
+  const handleSelectTableCard = useCallback(async (table) => {
+    if (!table) return;
     setSelectedTable(table);
     setIsAddingItems(false);
 
@@ -723,7 +730,52 @@ export default function OrdersPage() {
       setCheckoutOrder(null);
       openDirectOrder();
     }
-  };
+  }, [isTableOccupiedOrBusy, getTableFallbackOrder]);
+
+  const focusAndBlinkTableForBilling = useCallback(
+    (tableId, tableName = '') => {
+      const matchedTable =
+        tables.find((t) => tableId != null && String(t.id) === String(tableId)) ||
+        tables.find(
+          (t) =>
+            tableName &&
+            normalizeTableLabel(t.table_name || t.tableNumber || t.number) ===
+              normalizeTableLabel(tableName)
+        ) ||
+        null;
+
+      const resolvedId = matchedTable?.id ?? tableId;
+      if (resolvedId != null) {
+        const key = String(resolvedId);
+        setBlinkingTableId(key);
+
+        if (blinkTimerRef.current) {
+          clearTimeout(blinkTimerRef.current);
+        }
+        blinkTimerRef.current = setTimeout(() => {
+          setBlinkingTableId((prev) => (prev === key ? null : prev));
+        }, 6000);
+
+        const cardEl = tableCardRefs.current[key];
+        if (cardEl && typeof cardEl.scrollIntoView === 'function') {
+          cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        if (matchedTable) {
+          handleSelectTableCard(matchedTable);
+        }
+      }
+    },
+    [tables, handleSelectTableCard]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (blinkTimerRef.current) {
+        clearTimeout(blinkTimerRef.current);
+      }
+    };
+  }, []);
 
   const triggerManualKOTPrint = async (order, deltaItems) => {
     if (!deltaItems || deltaItems.length === 0) return;
@@ -1034,6 +1086,81 @@ export default function OrdersPage() {
       });
     };
 
+    const handleFinalBillRequest = (payload = {}) => {
+      const captainName =
+        payload.captainName ||
+        payload.captain_name ||
+        payload.requestedBy ||
+        payload.captain ||
+        'Captain';
+      const tableName =
+        payload.tableName ||
+        payload.table_name ||
+        payload.tableNumber ||
+        payload.table ||
+        'Table';
+      const tableId = payload.tableId ?? payload.table_id ?? null;
+      const orderRef =
+        payload.orderNumber || payload.order_number || payload.orderId || payload.order_id || '';
+      const totalAmt = payload.grandTotal ?? payload.grand_total ?? payload.total ?? null;
+
+      const notif = {
+        id: `${tableId || tableName}-${orderRef || 'req'}-${Date.now()}`,
+        captainName,
+        tableName,
+        tableId,
+        orderRef,
+        totalAmt,
+        createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      setBillRequestNotifications((prev) => [notif, ...prev.slice(0, 9)]);
+      playAlertChime();
+      triggerDebounced('syncTable', () => {
+        syncTableState();
+      });
+
+      toast(
+        (t) => (
+          <div
+            onClick={() => {
+              toast.dismiss(t.id);
+              focusAndBlinkTableForBilling(tableId, tableName);
+            }}
+            className="cursor-pointer space-y-1 min-w-[250px]"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                Final Bill Request
+              </span>
+              <span className="text-[10px] text-slate-300 font-bold">{notif.createdAt}</span>
+            </div>
+            <p className="text-xs font-black text-white">
+              {tableName} {orderRef ? `(#${orderRef})` : ''}
+              {totalAmt != null && Number(totalAmt) > 0 ? ` · ${formatCurrency(totalAmt, 0)}` : ''}
+            </p>
+            <p className="text-[11px] text-amber-200 font-bold">
+              Requested by: <span className="underline">{captainName}</span> — Click to blink & bill
+            </p>
+          </div>
+        ),
+        {
+          id: `final-bill-${tableId || tableName}-${orderRef || 'req'}`,
+          duration: 10000,
+          style: {
+            borderRadius: '14px',
+            background: '#18181b',
+            color: '#fff',
+            border: '1px solid rgba(245, 158, 11, 0.55)'
+          }
+        }
+      );
+    };
+
+    const handleDomBillRequest = (e) => {
+      if (e?.detail) handleFinalBillRequest(e.detail);
+    };
+
     const handleCustomerRequestData = (e) => {
       const request = e.detail;
       if (!request || !request.tableId) return;
@@ -1052,6 +1179,7 @@ export default function OrdersPage() {
       });
     };
     window.addEventListener('mejwani:customer-request', handleCustomerRequestData);
+    window.addEventListener('mejwani:final-bill-request', handleDomBillRequest);
 
     if (socket.connected && hotelId) {
       socket.emit('join-hotel-room', `${hotelId}:admin`);
@@ -1100,6 +1228,10 @@ export default function OrdersPage() {
     socket.on('order-updated', handleTableActivity);
     socket.on('table-updated', handleTableActivity);
     socket.on('bill-created', handleTableActivity);
+    socket.on('final-bill-request', handleFinalBillRequest);
+    socket.on('bill-requested', handleFinalBillRequest);
+    socket.on('request-final-bill', handleFinalBillRequest);
+    socket.on('captain-bill-request', handleFinalBillRequest);
     socket.on('kot_print_acknowledged', handleKotPrintAcknowledged);
     socket.on('kot_print_failed', handleKotPrintFailed);
     socket.on('bill_print_acknowledged', handleBillPrintAcknowledged);
@@ -1120,13 +1252,24 @@ export default function OrdersPage() {
       socket.off('order-updated', handleTableActivity);
       socket.off('table-updated', handleTableActivity);
       socket.off('bill-created', handleTableActivity);
+      socket.off('final-bill-request', handleFinalBillRequest);
+      socket.off('bill-requested', handleFinalBillRequest);
+      socket.off('request-final-bill', handleFinalBillRequest);
+      socket.off('captain-bill-request', handleFinalBillRequest);
       socket.off('kot_print_acknowledged', handleKotPrintAcknowledged);
       socket.off('kot_print_failed', handleKotPrintFailed);
       socket.off('bill_print_acknowledged', handleBillPrintAcknowledged);
       window.removeEventListener('mejwani:customer-request', handleCustomerRequestData);
+      window.removeEventListener('mejwani:final-bill-request', handleDomBillRequest);
       window.removeEventListener('mejwani-settings-updated', handleSettingsUpdated);
     };
-  }, [syncOperationalState, syncTableState, clearAckTimeout, onPrintJobAcknowledgedLocal]);
+  }, [
+    syncOperationalState,
+    syncTableState,
+    clearAckTimeout,
+    onPrintJobAcknowledgedLocal,
+    focusAndBlinkTableForBilling
+  ]);
 
   useEffect(() => {
     if (!orders || orders.length === 0) return;
@@ -1768,31 +1911,53 @@ export default function OrdersPage() {
 
   const getTableColorClass = (table) => {
     const isSelected = selectedTableLive && String(selectedTableLive.id) === String(table.id);
+    const isBlinking = blinkingTableId != null && String(blinkingTableId) === String(table.id);
+    const blinkClass = isBlinking
+      ? 'animate-bounce ring-4 ring-amber-400 border-amber-500 shadow-xl shadow-amber-500/30 z-20'
+      : '';
     const displayStatus = getTableDisplayStatus(table);
 
+    let baseClass = '';
     if (displayStatus === 'occupied') {
-      return isSelected
+      baseClass = isSelected
         ? 'bg-rose-200 dark:bg-rose-900/60 border-2 border-rose-600 text-rose-950 dark:text-rose-100 shadow-lg ring-2 ring-rose-600/40'
         : 'bg-rose-100 dark:bg-rose-950/45 border-2 border-rose-500 text-rose-900 dark:text-rose-200 hover:bg-rose-200/80 dark:hover:bg-rose-900/50 hover:border-rose-600 shadow-md';
     } else if (displayStatus === 'bill_pending') {
-      return isSelected
+      baseClass = isSelected
         ? 'bg-amber-100 dark:bg-amber-950/40 border-2 border-amber-500 text-amber-900 dark:text-amber-200 shadow-md ring-2 ring-amber-500/30'
         : 'bg-amber-50/90 dark:bg-amber-950/25 border-2 border-amber-500/50 text-amber-800 dark:text-amber-300 hover:border-amber-500 shadow-sm';
     } else if (displayStatus === 'customer_present') {
-      return isSelected
+      baseClass = isSelected
         ? 'bg-orange-100 dark:bg-orange-950/40 border-orange-500 text-orange-900 dark:text-orange-200 shadow-md ring-2 ring-orange-500/30 animate-pulse'
         : 'bg-orange-50/70 dark:bg-orange-950/20 border-orange-500/30 dark:border-orange-500/10 text-orange-800 dark:text-orange-400 hover:border-orange-500/60 shadow-sm animate-pulse';
     } else {
-      return isSelected
+      baseClass = isSelected
         ? 'bg-emerald-100 dark:bg-emerald-950/40 border-emerald-500 text-emerald-900 dark:text-emerald-200 shadow-md ring-2 ring-emerald-500/30'
         : 'bg-emerald-50/50 dark:bg-emerald-950/10 border-emerald-500/20 dark:border-emerald-500/5 text-emerald-800 dark:text-emerald-400 hover:border-emerald-500/50 shadow-sm';
     }
+
+    return `${baseClass} ${blinkClass}`;
   };
 
   return (
     <AdminLayout>
       <div className="-mt-6 space-y-4 w-full max-w-full overflow-visible">
-        <div className="flex justify-end items-center mb-1">
+        <div className="flex justify-end items-center gap-2.5 flex-wrap mb-1">
+          {billRequestNotifications.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                const latest = billRequestNotifications[0];
+                focusAndBlinkTableForBilling(latest.tableId, latest.tableName);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md animate-pulse cursor-pointer"
+            >
+              <BellRing className="w-4 h-4" />
+              <span>
+                Bill Req: {billRequestNotifications[0].tableName} · By {billRequestNotifications[0].captainName}
+              </span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => navigate('/admin/bills')}
@@ -1891,6 +2056,9 @@ export default function OrdersPage() {
                         return (
                           <div
                             key={table.id}
+                            ref={(el) => {
+                              tableCardRefs.current[String(table.id)] = el;
+                            }}
                             onClick={() => handleSelectTableCard(table)}
                             className={`p-4 rounded-2xl border transition-all duration-300 flex flex-col justify-between items-center text-center min-h-[110px] cursor-pointer ${getTableColorClass(
                               table
