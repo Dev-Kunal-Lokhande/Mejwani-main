@@ -45,9 +45,25 @@ const getHotelId = () => {
   }
 };
 
+const getHiddenTableStorageKey = () => {
+  const hotelId = getHotelId();
+  return `mejwani_hidden_parcel_tables_${hotelId || 'default'}`;
+};
+
+const readHiddenTableIds = () => {
+  try {
+    const raw = localStorage.getItem(getHiddenTableStorageKey());
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+};
+
 export default function ParcelManagement() {
   const [tables, setTables] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [hiddenParcelTableIds, setHiddenParcelTableIds] = useState(() => readHiddenTableIds());
   const [printerConfig, setPrinterConfig] = useState(() => {
     try {
       const hotelId = getHotelId();
@@ -66,6 +82,14 @@ export default function ParcelManagement() {
   const cgstRate = Number(systemSettings.billing.cgst) || 0;
   const sgstRate = Number(systemSettings.billing.sgst) || 0;
   const serviceChargeRate = Number(systemSettings.billing.serviceCharge) || 0;
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(getHiddenTableStorageKey(), JSON.stringify(hiddenParcelTableIds));
+    } catch (err) {
+      console.warn('[Parcel] Failed to persist hidden table IDs:', err);
+    }
+  }, [hiddenParcelTableIds]);
 
   window.mejwani_start_ack_timeout = window.mejwani_start_ack_timeout || ((jobId, jobType) => {
     window.mejwani_ack_timers = window.mejwani_ack_timers || {};
@@ -117,7 +141,6 @@ export default function ParcelManagement() {
   const [isCreatingDirectOrder, setIsCreatingDirectOrder] = useState(false);
   const [isSubmittingDirectOrder, setIsSubmittingDirectOrder] = useState(false);
 
-  // Cart / Menu Selector States
   const [additionalItems, setAdditionalItems] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
   const [menuSearchTerm, setMenuSearchTerm] = useState('');
@@ -126,21 +149,21 @@ export default function ParcelManagement() {
   const [isSubmittingAdditional, setIsSubmittingAdditional] = useState(false);
   const [menuSearchHighlightedIndex, setMenuSearchHighlightedIndex] = useState(0);
 
-  // Table Management States
   const [isManageTablesOpen, setIsManageTablesOpen] = useState(false);
   const [isAddTableOpen, setIsAddTableOpen] = useState(false);
   const [editingTable, setEditingTable] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Form states for adding/editing tables
   const [formTableNumber, setFormTableNumber] = useState('');
   const [formTableName, setFormTableName] = useState('');
   const [formDisplayOrder, setFormDisplayOrder] = useState(0);
   const [formIsActive, setFormIsActive] = useState(true);
 
   const parcelTables = useMemo(() => {
+    const hiddenSet = new Set(hiddenParcelTableIds.map(String));
     return tables
       .filter(t => {
+        if (hiddenSet.has(String(t.id))) return false;
         const sec = (t.section_name ?? t.sectionName ?? t.section ?? '').toString().trim().toUpperCase();
         const isParcelFlag = t.is_parcel === true || t.isParcel === true;
         return sec === 'PARCEL' || sec.includes('PARCEL') || isParcelFlag;
@@ -154,7 +177,7 @@ export default function ParcelManagement() {
         const orderB = b.display_order ?? b.displayOrder ?? 0;
         return Number(orderA) - Number(orderB);
       });
-  }, [tables]);
+  }, [tables, hiddenParcelTableIds]);
 
   const selectedTableLive = useMemo(() => {
     if (!selectedTable) return null;
@@ -1011,6 +1034,10 @@ export default function ParcelManagement() {
       });
       const data = await parseJsonSafe(res);
       if (data?.success) {
+        const createdId = data.data?.id;
+        if (createdId != null) {
+          setHiddenParcelTableIds(prev => prev.filter(id => String(id) !== String(createdId)));
+        }
         toast.success('Parcel table added successfully!');
         setIsAddTableOpen(false);
         setFormTableNumber('');
@@ -1091,21 +1118,13 @@ export default function ParcelManagement() {
   };
 
   const handleDeleteTable = async (tableId) => {
-    if (!window.confirm('Are you sure you want to delete this parcel table?')) return;
-    try {
-      const res = await authorizedFetch(`${API_BASE}/tables/${tableId}`, {
-        method: 'DELETE'
-      });
-      const data = await parseJsonSafe(res);
-      if (data?.success) {
-        toast.success('Parcel table deleted successfully!');
-        fetchTables();
-      } else {
-        throw new Error(data?.message || 'Failed to delete table');
-      }
-    } catch (err) {
-      toast.error(`Error: ${err.message}`);
+    if (!window.confirm('Are you sure you want to remove this parcel table from view?')) return;
+    const idStr = String(tableId);
+    setHiddenParcelTableIds(prev => (prev.includes(idStr) ? prev : [...prev, idStr]));
+    if (selectedTable && String(selectedTable.id) === idStr) {
+      setSelectedTable(null);
     }
+    toast.success('Parcel table removed from view!');
   };
 
   const startEditing = (table) => {
@@ -2278,7 +2297,7 @@ export default function ParcelManagement() {
                     Manage Parcel Tables
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-white/40 font-bold mt-1 uppercase tracking-wide">
-                    Delete or update active parcel tables layout
+                    Remove or update active parcel tables layout
                   </p>
                 </div>
                 <button
