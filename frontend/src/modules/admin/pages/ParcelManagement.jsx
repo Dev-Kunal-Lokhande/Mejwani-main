@@ -146,14 +146,13 @@ export default function ParcelManagement() {
         return sec === 'PARCEL' || sec.includes('PARCEL') || isParcelFlag;
       })
       .sort((a, b) => {
+        const nameA = String(a.table_name ?? a.tableName ?? '');
+        const nameB = String(b.table_name ?? b.tableName ?? '');
+        const byName = nameA.localeCompare(nameB, undefined, { numeric: true });
+        if (byName !== 0) return byName;
         const orderA = a.display_order ?? a.displayOrder ?? 0;
         const orderB = b.display_order ?? b.displayOrder ?? 0;
-        if (Number(orderA) !== Number(orderB)) return Number(orderA) - Number(orderB);
-        return String(a.table_number ?? a.tableNumber ?? '').localeCompare(
-          String(b.table_number ?? b.tableNumber ?? ''),
-          undefined,
-          { numeric: true }
-        );
+        return Number(orderA) - Number(orderB);
       });
   }, [tables]);
 
@@ -970,28 +969,32 @@ export default function ParcelManagement() {
 
   const handleAddTable = async (e) => {
     e.preventDefault();
-    if (!formTableNumber.trim()) {
+    const rawCode = formTableNumber.trim();
+    if (!rawCode) {
       toast.error('Parcel Code is required.');
       return;
     }
-    const match = formTableNumber.trim().match(/^P(\d+)$/);
+    const match = rawCode.match(/^P(\d+)$/i);
     if (!match) {
       toast.error('Invalid Parcel Code format. Use P<number> (e.g. P1, P2, P10)');
       return;
     }
 
-    const isDuplicate = tables.some(t =>
-      (t.section_name ?? t.sectionName ?? '').toString().toUpperCase() === 'PARCEL' &&
-      String(t.table_number ?? t.tableNumber ?? '').toUpperCase() === formTableNumber.trim().toUpperCase()
-    );
-    if (isDuplicate) {
-      toast.error('A parcel table with this code already exists.');
-      return;
-    }
-
+    const normalizedCode = `P${parseInt(match[1], 10)}`;
     const numericPart = parseInt(match[1], 10);
     const tableName = `Parcel ${numericPart}`;
     const displayOrder = numericPart;
+
+    const isDuplicate = parcelTables.some(t => {
+      const existingCode = String(t.table_number ?? t.tableNumber ?? '').trim().toUpperCase();
+      const existingName = String(t.table_name ?? t.tableName ?? '').trim().toLowerCase();
+      return existingCode === normalizedCode.toUpperCase() || existingName === tableName.toLowerCase();
+    });
+
+    if (isDuplicate) {
+      toast.error(`Table name "${tableName}" (${normalizedCode}) already exists.`);
+      return;
+    }
 
     setActionLoading(true);
     try {
@@ -999,7 +1002,7 @@ export default function ParcelManagement() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          table_number: formTableNumber.trim(),
+          table_number: normalizedCode,
           table_name: tableName,
           display_order: displayOrder,
           is_active: true,
@@ -1028,29 +1031,33 @@ export default function ParcelManagement() {
   const handleEditTable = async (e) => {
     e.preventDefault();
     if (!editingTable) return;
-    if (!formTableNumber.trim()) {
+    const rawCode = formTableNumber.trim();
+    if (!rawCode) {
       toast.error('Parcel Code is required.');
       return;
     }
-    const match = formTableNumber.trim().match(/^P(\d+)$/);
+    const match = rawCode.match(/^P(\d+)$/i);
     if (!match) {
       toast.error('Invalid Parcel Code format. Use P<number> (e.g. P1, P2, P10)');
       return;
     }
 
-    const isDuplicate = tables.some(t =>
-      (t.section_name ?? t.sectionName ?? '').toString().toUpperCase() === 'PARCEL' &&
-      String(t.table_number ?? t.tableNumber ?? '').toUpperCase() === formTableNumber.trim().toUpperCase() &&
-      t.id !== editingTable.id
-    );
-    if (isDuplicate) {
-      toast.error('A parcel table with this code already exists.');
-      return;
-    }
-
+    const normalizedCode = `P${parseInt(match[1], 10)}`;
     const numericPart = parseInt(match[1], 10);
     const tableName = `Parcel ${numericPart}`;
     const displayOrder = numericPart;
+
+    const isDuplicate = parcelTables.some(t => {
+      if (t.id === editingTable.id) return false;
+      const existingCode = String(t.table_number ?? t.tableNumber ?? '').trim().toUpperCase();
+      const existingName = String(t.table_name ?? t.tableName ?? '').trim().toLowerCase();
+      return existingCode === normalizedCode.toUpperCase() || existingName === tableName.toLowerCase();
+    });
+
+    if (isDuplicate) {
+      toast.error(`Table name "${tableName}" (${normalizedCode}) already exists.`);
+      return;
+    }
 
     setActionLoading(true);
     try {
@@ -1058,7 +1065,7 @@ export default function ParcelManagement() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          table_number: formTableNumber.trim(),
+          table_number: normalizedCode,
           table_name: tableName,
           display_order: displayOrder,
           is_active: editingTable.is_active !== undefined ? editingTable.is_active : true
