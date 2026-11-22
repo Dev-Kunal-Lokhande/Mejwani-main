@@ -23,6 +23,28 @@ function WaitingTimer({ createdAt }) {
   return <span className="font-mono font-black">{elapsed}</span>;
 }
 
+const isClosedOrder = (order) => {
+  if (!order) return true;
+  const st = String(order.status || '').toUpperCase().trim();
+  return ['COMPLETED', 'PAID', 'SETTLED', 'CANCELLED', 'CLOSED'].includes(st);
+};
+
+const resolveEffectiveStatus = (table) => {
+  const raw = String(table?.status || 'available').toLowerCase().trim();
+  const hasLiveOrder = Boolean(table?.currentOrder && !isClosedOrder(table.currentOrder));
+
+  if (raw === 'available' || raw === 'vacant' || raw === 'free') {
+    return 'available';
+  }
+  if ((raw === 'occupied' || raw === 'busy' || raw === 'running') && !hasLiveOrder && !table?.occupied_at) {
+    return 'available';
+  }
+  if (raw === 'bill_pending' && !hasLiveOrder && !table?.occupied_at && Number(table?.currentOrder?.total || 0) <= 0) {
+    return 'available';
+  }
+  return raw;
+};
+
 export default function TableSelector({ tables, activeSection, onSelectTable, activeTable, captainRequests = [], onRejectRequest }) {
   // Normalize both sides for a safe match: DB section_name vs enriched section.name
   const filteredTables = tables.filter(t => {
@@ -39,13 +61,18 @@ export default function TableSelector({ tables, activeSection, onSelectTable, ac
     '| all table sections:', tables.map(t => t.section),
     '| filteredTables:', filteredTables.length);
 
+  const enrichedTables = filteredTables.map((t) => ({
+    ...t,
+    effectiveStatus: resolveEffectiveStatus(t),
+  }));
+
   const stats = {
-    total: filteredTables.length,
-    available: filteredTables.filter(t => t.status === 'available').length,
-    occupied: filteredTables.filter(t => t.status === 'occupied').length,
-    reserved: filteredTables.filter(t => t.status === 'reserved').length,
-    billPending: filteredTables.filter(t => t.status === 'bill_pending').length,
-    customerPresent: filteredTables.filter(t => t.status === 'customer_present').length,
+    total: enrichedTables.length,
+    available: enrichedTables.filter(t => t.effectiveStatus === 'available').length,
+    occupied: enrichedTables.filter(t => t.effectiveStatus === 'occupied').length,
+    reserved: enrichedTables.filter(t => t.effectiveStatus === 'reserved').length,
+    billPending: enrichedTables.filter(t => t.effectiveStatus === 'bill_pending').length,
+    customerPresent: enrichedTables.filter(t => t.effectiveStatus === 'customer_present').length,
   };
 
   const getStatusColor = (status) => {
@@ -101,9 +128,11 @@ export default function TableSelector({ tables, activeSection, onSelectTable, ac
 
       {/* Grid of Tables */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-6">
-        {filteredTables.map((table, index) => {
+        {enrichedTables.map((table, index) => {
           const isSelected = activeTable?.id === table.id;
-          const statusStyle = getStatusColor(table.status);
+          const status = table.effectiveStatus;
+          const statusStyle = getStatusColor(status);
+          const hasLiveOrder = Boolean(table.currentOrder && !isClosedOrder(table.currentOrder));
           const activeRequest = (captainRequests || []).find(r => r.table_id === table.id || r.table === table.number);
 
           return (
@@ -150,33 +179,33 @@ export default function TableSelector({ tables, activeSection, onSelectTable, ac
                 </div>
 
                 {/* Dining Duration Timer */}
-                {(table.occupied_at) && (
+                {status !== 'available' && table.occupied_at && (
                   <div className="flex items-center justify-center gap-1.5 text-[10px] sm:text-xs font-black uppercase text-slate-500 dark:text-white/45">
                     <DiningTimer
                       occupiedAt={table.occupied_at}
-                      isBillPending={table.status === 'bill_pending'}
+                      isBillPending={status === 'bill_pending'}
                     />
                   </div>
                 )}
 
                 {/* Status displays */}
                 <div className="flex items-center justify-center pt-1 sm:pt-2">
-                  {table.status === 'occupied' && table.currentOrder ? (
+                  {status === 'occupied' && hasLiveOrder ? (
                     <span className="text-[10px] sm:text-xs font-black uppercase text-rose-500 flex items-center justify-center gap-1 sm:gap-1.5 bg-rose-500/5 px-2 py-1 rounded-lg border border-rose-500/10 w-full min-h-[26px]">
-                      <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> <span className="truncate">₹{parseFloat(table.currentOrder.total).toFixed(0)}</span>
+                      <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> <span className="truncate">₹{parseFloat(table.currentOrder.total || 0).toFixed(0)}</span>
                     </span>
-                  ) : table.status === 'bill_pending' ? (
+                  ) : status === 'bill_pending' ? (
                     <span className="text-[10px] sm:text-xs font-black uppercase text-amber-500 animate-pulse flex items-center justify-center gap-1 sm:gap-1.5 bg-amber-500/5 px-2 py-1 rounded-lg border border-amber-500/10 w-full min-h-[26px]">
                       <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin shrink-0" /> <span className="truncate">Bill</span>
                     </span>
-                  ) : table.status === 'reserved' ? (
+                  ) : status === 'reserved' ? (
                     <span className="text-[10px] sm:text-xs font-black uppercase text-amber-500 flex items-center justify-center gap-1 sm:gap-1.5 bg-amber-500/5 px-2 py-1 rounded-lg border border-amber-500/10 w-full min-h-[26px]">
                       <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> <span className="truncate">Booked</span>
                     </span>
-                  ) : table.status === 'customer_present' ? (
+                  ) : status === 'customer_present' ? (
                     <div className="flex flex-col gap-1.5 w-full">
                       <span className="text-[10px] sm:text-xs font-black uppercase text-orange-500 animate-pulse flex items-center justify-center gap-1 sm:gap-1.5 bg-orange-500/5 px-2 py-1 rounded-lg border border-orange-500/20 w-full min-h-[26px]">
-                        <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 animate-bounce text-orange-500" /> 
+                        <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 animate-bounce text-orange-500" />
                         <span className="truncate">
                           CUSTOMER REQUEST {activeRequest && <>(<WaitingTimer createdAt={activeRequest.created_at || activeRequest.createdAt} />)</>}
                         </span>

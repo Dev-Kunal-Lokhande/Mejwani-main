@@ -62,16 +62,24 @@ const showPrinterErrorToast = (message, toastId, navigate) => {
   );
 };
 
+const getOrderTableId = (order) =>
+  order?.table_id ?? order?.tableId ?? order?.table?.id ?? null;
+
+const isActiveOrder = (order) => {
+  if (!order) return false;
+  const st = String(order.status || '').toUpperCase();
+  return st !== 'COMPLETED' && st !== 'CANCELLED';
+};
+
 export default function OrdersPage() {
   const navigate = useNavigate();
 
-  // Sync state
   const [tables, setTables] = useState([]);
   const [orders, setOrders] = useState([]);
   const [printerConfig, setPrinterConfig] = useState(() => {
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
       const saved = localStorage.getItem(`mejwani_printer_config_${hotelId}`);
       return saved ? JSON.parse(saved) : null;
     } catch {
@@ -92,6 +100,92 @@ export default function OrdersPage() {
   const cgstRate = Number(systemSettings.billing.cgst) || 0;
   const sgstRate = Number(systemSettings.billing.sgst) || 0;
   const serviceChargeRate = Number(systemSettings.billing.serviceCharge) || 0;
+
+  const findActiveOrderForTable = useCallback(
+    (table) => {
+      if (!table) return null;
+      return (
+        orders.find((o) => {
+          if (!isActiveOrder(o)) return false;
+          const oTableId = getOrderTableId(o);
+          if (oTableId != null && String(oTableId) === String(table.id)) return true;
+          const oTableName = String(o.table_name || o.tableName || '').trim().toLowerCase();
+          const tName = String(table.table_name || table.tableName || '').trim().toLowerCase();
+          return Boolean(oTableName && tName && oTableName === tName);
+        }) || null
+      );
+    },
+    [orders]
+  );
+
+  const isTableOccupiedOrBusy = useCallback(
+    (table) => {
+      if (!table) return false;
+      const st = String(table.status || '').toLowerCase().trim();
+      if (st === 'occupied' || st === 'busy' || st === 'bill_pending' || st === 'running') {
+        return true;
+      }
+      return Boolean(findActiveOrderForTable(table));
+    },
+    [findActiveOrderForTable]
+  );
+
+  const getTableFallbackOrder = useCallback(
+    (table) => {
+      if (!table) return null;
+      const fromOrders = findActiveOrderForTable(table);
+      if (fromOrders) return fromOrders;
+
+      const embeddedOrder =
+        table.currentOrder ||
+        table.current_order ||
+        table.activeOrder ||
+        table.active_order ||
+        table.order ||
+        null;
+
+      if (embeddedOrder && isActiveOrder(embeddedOrder)) {
+        return {
+          ...embeddedOrder,
+          id: embeddedOrder.id ?? embeddedOrder.order_id ?? embeddedOrder._id ?? `TBL-${table.id}`,
+          table_id: getOrderTableId(embeddedOrder) ?? table.id,
+          table_name: embeddedOrder.table_name || table.table_name,
+          items: Array.isArray(embeddedOrder.items) ? embeddedOrder.items : []
+        };
+      }
+
+      const statusLower = String(table.status || '').toLowerCase().trim();
+      if (
+        statusLower === 'occupied' ||
+        statusLower === 'busy' ||
+        statusLower === 'bill_pending' ||
+        statusLower === 'running'
+      ) {
+        const amount = Number(
+          table.current_amount ??
+            table.order_total ??
+            table.grand_total ??
+            table.total ??
+            0
+        );
+        return {
+          id: table.current_order_id ?? table.order_id ?? `TBL-${table.id}`,
+          table_id: table.id,
+          table_name: table.table_name,
+          status: statusLower === 'bill_pending' ? 'BILL_PENDING' : 'OCCUPIED',
+          created_at: table.occupied_at || new Date().toISOString(),
+          items: Array.isArray(table.items) ? table.items : [],
+          subtotal: amount,
+          cgst: 0,
+          sgst: 0,
+          grand_total: amount
+        };
+      }
+
+      return null;
+    },
+    [findActiveOrderForTable]
+  );
 
   const startAckTimeout = useCallback((jobId, jobType) => {
     if (ackTimersRef.current[jobId]) {
@@ -132,18 +226,15 @@ export default function OrdersPage() {
     }
   }, []);
 
-  // Refs for concurrent fetch guards
   const isFetchingTablesRef = useRef(false);
   const isFetchingOrdersRef = useRef(false);
   const isFetchingSalesRef = useRef(false);
   const isFetchingParcelsRef = useRef(false);
 
-  // Navigation & selection state
   const [selectedTable, setSelectedTable] = useState(null);
   const [isAddingItems, setIsAddingItems] = useState(false);
   const [isCreatingDirectOrder, setIsCreatingDirectOrder] = useState(false);
 
-  // Auto-focus the menu search input whenever the menu panel becomes visible
   useEffect(() => {
     if (isAddingItems || isCreatingDirectOrder) {
       const timer = setTimeout(() => {
@@ -155,15 +246,12 @@ export default function OrdersPage() {
 
   useEffect(() => {
     const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-    const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+    const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
     if (!hotelId || hotelId === '0') return;
 
     const fetchPrinterConfig = async () => {
       try {
-        const token = localStorage.getItem('mejwani_admin_jwt');
-        const resp = await fetch(`${API_BASE}/print-agent/status`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const resp = await authorizedFetch(`${API_BASE}/print-agent/status`);
         const data = await resp.json();
         if (resp.ok && data && data.success && data.agent) {
           const config =
@@ -186,7 +274,6 @@ export default function OrdersPage() {
 
   const [isSubmittingDirectOrder, setIsSubmittingDirectOrder] = useState(false);
 
-  // Shared menu selector state
   const [additionalItems, setAdditionalItems] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
   const [menuSearchTerm, setMenuSearchTerm] = useState('');
@@ -223,7 +310,6 @@ export default function OrdersPage() {
     }
   };
 
-  // Load menu items
   const loadMenuItems = async () => {
     const cached = getCachedMenu();
     if (cached && cached.length > 0) {
@@ -232,19 +318,19 @@ export default function OrdersPage() {
     }
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
       const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
-      const res = await axios.get(`${API_BASE}/menu${hotelParam}`);
-      if (res.data.success) {
-        setCachedMenu(res.data.data);
-        setMenuItems(res.data.data || []);
+      const res = await authorizedFetch(`${API_BASE}/menu${hotelParam}`);
+      const data = await res.json();
+      if (data.success) {
+        setCachedMenu(data.data);
+        setMenuItems(data.data || []);
       }
     } catch (err) {
       console.error('[Orders] Failed to load menu items:', err);
     }
   };
 
-  // Derived menu helpers
   const menuCategories = useMemo(() => {
     const unique = new Set(menuItems.map((item) => item.category || 'Uncategorized'));
     return ['All', ...Array.from(unique)];
@@ -314,7 +400,6 @@ export default function OrdersPage() {
     [additionalItems]
   );
 
-  // Add item to the additional items cart
   const handleAddAdditionalItem = (menuItem, portion = null) => {
     const isHalfFull = menuItem.pricing_type === 'HALF_FULL';
     const portionType = isHalfFull
@@ -390,7 +475,6 @@ export default function OrdersPage() {
     );
   };
 
-  // Submit additional items
   const handleSubmitAdditionalItems = async (options = {}) => {
     if (!activeOrderForSelectedTable || !selectedTableLive) return;
 
@@ -464,7 +548,7 @@ export default function OrdersPage() {
     setIsSubmittingAdditional(true);
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
       const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
 
       const payload = {
@@ -573,31 +657,40 @@ export default function OrdersPage() {
     setMenuSearchTerm('');
   };
 
-  const prevSelectedTableIdRef = useRef(null);
-  useEffect(() => {
-    if (!selectedTable) {
-      prevSelectedTableIdRef.current = null;
-      return;
-    }
-    if (selectedTable.id === prevSelectedTableIdRef.current) return;
-    prevSelectedTableIdRef.current = selectedTable.id;
+  const handleSelectTableCard = async (table) => {
+    setSelectedTable(table);
+    setIsAddingItems(false);
 
-    const hasActiveOrder = orders.some(
-      (o) => o.table_id === selectedTable.id && o.status !== 'COMPLETED' && o.status !== 'CANCELLED'
-    );
-    if (!hasActiveOrder) {
-      openDirectOrder();
-    } else {
+    if (isTableOccupiedOrBusy(table)) {
       setIsCreatingDirectOrder(false);
+      setAdditionalItems([]);
+      const existingOrder = getTableFallbackOrder(table);
+      setCheckoutOrder(
+        existingOrder || {
+          id: `TBL-${table.id}`,
+          table_id: table.id,
+          table_name: table.table_name,
+          status: 'OCCUPIED',
+          created_at: table.occupied_at || new Date().toISOString(),
+          items: [],
+          subtotal: 0,
+          cgst: 0,
+          sgst: 0,
+          grand_total: 0
+        }
+      );
+      await fetchOrders();
+    } else {
+      setCheckoutOrder(null);
+      openDirectOrder();
     }
-  }, [selectedTable?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
 
-  // Triggers manual KOT printing
   const triggerManualKOTPrint = async (order, deltaItems) => {
     if (!deltaItems || deltaItems.length === 0) return;
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
 
       const kotData = {
         title: systemSettings?.printing?.kotTitle || 'KITCHEN ORDER TICKET',
@@ -667,7 +760,6 @@ export default function OrdersPage() {
     }
   };
 
-  // Submit direct bill order
   const handleCreateDirectOrder = async (options = {}) => {
     if (additionalItems.length === 0) {
       toast.error('Add at least one item to create a bill.', {
@@ -680,7 +772,7 @@ export default function OrdersPage() {
     setIsSubmittingDirectOrder(true);
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
       const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
 
       const payload = {
@@ -705,6 +797,7 @@ export default function OrdersPage() {
           ...prev,
           {
             ...newOrder,
+            table_id: getOrderTableId(newOrder) ?? selectedTable.id,
             status: 'BILL_PENDING',
             kotPrinted: true
           }
@@ -740,12 +833,11 @@ export default function OrdersPage() {
     }
   };
 
-  // Memoized individual fetchers
   const fetchTables = useCallback(async () => {
     isFetchingTablesRef.current = true;
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
       const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
       const tablesRes = await authorizedFetch(
         `${API_BASE}/tables${hotelParam}${hotelParam ? '&' : '?'}t=${Date.now()}`
@@ -754,7 +846,7 @@ export default function OrdersPage() {
       const tablesData = await tablesRes.json();
       if (tablesData.success) {
         const fetchedTables = (tablesData.data || []).filter(
-          (t) => t.section_name?.toUpperCase() !== 'PARCEL'
+          (t) => String(t.section_name ?? t.sectionName ?? '').toUpperCase() !== 'PARCEL'
         );
         setTables(fetchedTables);
       }
@@ -769,14 +861,19 @@ export default function OrdersPage() {
     isFetchingOrdersRef.current = true;
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
       const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
-      const ordersRes = await fetch(
+      const ordersRes = await authorizedFetch(
         `${API_BASE}/orders${hotelParam}${hotelParam ? '&' : '?'}t=${Date.now()}`
       );
       const ordersData = await ordersRes.json();
       if (ordersData.success) {
-        setOrders(ordersData.data || []);
+        const rawList = Array.isArray(ordersData.data)
+          ? ordersData.data
+          : Array.isArray(ordersData.data?.orders)
+          ? ordersData.data.orders
+          : [];
+        setOrders(rawList);
       }
     } catch (err) {
       console.error('[Orders] Fetch orders issue:', err);
@@ -789,9 +886,9 @@ export default function OrdersPage() {
     isFetchingSalesRef.current = true;
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
       const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
-      await fetch(`${API_BASE}/orders/today/sales${hotelParam}${hotelParam ? '&' : '?'}t=${Date.now()}`);
+      await authorizedFetch(`${API_BASE}/orders/today/sales${hotelParam}${hotelParam ? '&' : '?'}t=${Date.now()}`);
     } catch (err) {
       console.error('[Orders] Fetch sales issue:', err);
     } finally {
@@ -803,9 +900,9 @@ export default function OrdersPage() {
     isFetchingParcelsRef.current = true;
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
       const todayKey = new Date().toISOString().split('T')[0];
-      await fetch(
+      await authorizedFetch(
         `${API_BASE}/parcels?date=${todayKey}${hotelId ? '&hotelId=' + hotelId : ''}&t=${Date.now()}`
       );
     } catch (err) {
@@ -818,9 +915,9 @@ export default function OrdersPage() {
   const fetchCaptainRequests = useCallback(async () => {
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
       const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
-      const res = await fetch(
+      const res = await authorizedFetch(
         `${API_BASE}/customer/active-captain-requests${hotelParam}${hotelParam ? '&' : '?'}t=${Date.now()}`
       );
       const data = await res.json();
@@ -858,7 +955,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-    const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+    const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
 
     syncOperationalState();
 
@@ -866,8 +963,8 @@ export default function OrdersPage() {
     window.addEventListener('mejwani-settings-updated', handleSettingsUpdated);
 
     const timer = setInterval(() => {
-      syncOperationalState();
-    }, 30000);
+      syncTableState();
+    }, 4000);
 
     const debounceTimers = {
       sync: null,
@@ -925,6 +1022,7 @@ export default function OrdersPage() {
       if (hotelId) {
         socket.emit('join-hotel-room', `${hotelId}:admin`);
       }
+      syncTableState();
     };
 
     const handleKotPrintAcknowledged = (data) => {
@@ -991,12 +1089,11 @@ export default function OrdersPage() {
     };
   }, [syncOperationalState, syncTableState, clearAckTimeout, onPrintJobAcknowledgedLocal]);
 
-  // Automatic Thermal Printer KOT Printing Listener
   useEffect(() => {
     if (!orders || orders.length === 0) return;
 
     const unprintedOrders = orders.filter(
-      (order) => order.status !== 'COMPLETED' && order.status !== 'CANCELLED' && order.kotPrinted === false
+      (order) => isActiveOrder(order) && order.kotPrinted === false
     );
 
     if (unprintedOrders.length === 0) return;
@@ -1019,7 +1116,7 @@ export default function OrdersPage() {
           dateTime: order.created_at
             ? formatDateTimeDDMMYYYY(order.created_at)
             : formatDateTimeDDMMYYYY(new Date()),
-          items: order.items.map((item) => ({
+          items: (order.items || []).map((item) => ({
             name: item.name || item.itemName,
             quantity: item.quantity || item.qty || 1,
             note: item.note
@@ -1085,17 +1182,13 @@ export default function OrdersPage() {
 
   const selectedTableLive = useMemo(() => {
     if (!selectedTable) return null;
-    return tables.find((t) => t.id === selectedTable.id) || null;
+    return tables.find((t) => String(t.id) === String(selectedTable.id)) || selectedTable;
   }, [tables, selectedTable]);
 
   const activeOrderForSelectedTable = useMemo(() => {
     if (!selectedTableLive) return null;
-    return (
-      orders.find(
-        (o) => o.table_id === selectedTableLive.id && o.status !== 'COMPLETED' && o.status !== 'CANCELLED'
-      ) || null
-    );
-  }, [orders, selectedTableLive]);
+    return getTableFallbackOrder(selectedTableLive);
+  }, [selectedTableLive, getTableFallbackOrder]);
 
   const [checkoutOrder, setCheckoutOrder] = useState(null);
   const [eBillModalData, setEBillModalData] = useState(null);
@@ -1131,18 +1224,19 @@ export default function OrdersPage() {
       return;
     }
 
-    if (activeOrderForSelectedTable) {
-      setCheckoutOrder(activeOrderForSelectedTable);
+    if (isTableOccupiedOrBusy(selectedTableLive)) {
+      setIsCreatingDirectOrder(false);
+      setCheckoutOrder(getTableFallbackOrder(selectedTableLive));
     } else {
       setCheckoutOrder((prev) => {
-        if (prev && prev.table_id === selectedTableLive.id) {
-          const latestVersion = orders.find((o) => o.id === prev.id);
+        if (prev && String(getOrderTableId(prev)) === String(selectedTableLive.id)) {
+          const latestVersion = orders.find((o) => String(o.id) === String(prev.id));
           if (latestVersion) return latestVersion;
         }
         return null;
       });
     }
-  }, [selectedTableLive, orders, activeOrderForSelectedTable]);
+  }, [selectedTableLive, orders, isTableOccupiedOrBusy, getTableFallbackOrder]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -1169,7 +1263,7 @@ export default function OrdersPage() {
 
   const tablesByArea = useMemo(() => {
     return tables.reduce((acc, table) => {
-      const area = table.section_name || 'GENERAL';
+      const area = table.section_name || table.sectionName || 'GENERAL';
       if (!acc[area]) acc[area] = [];
       acc[area].push(table);
       return acc;
@@ -1191,24 +1285,47 @@ export default function OrdersPage() {
     if (!orderId) return;
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
+
+      const targetOrder = orders.find((ord) => String(ord.id) === String(orderId)) || checkoutOrder;
+      const targetTableId = getOrderTableId(targetOrder) ?? selectedTableLive?.id ?? null;
 
       setTables((prev) =>
         prev.map((t) => {
-          const o = orders.find((ord) => ord.id === orderId);
-          if (o && t.id === o.table_id) {
-            return { ...t, status: 'available' };
+          const matchesId = targetTableId != null && String(t.id) === String(targetTableId);
+          const matchesName =
+            targetOrder?.table_name &&
+            String(t.table_name || '').trim().toLowerCase() ===
+              String(targetOrder.table_name || '').trim().toLowerCase();
+          if (matchesId || matchesName) {
+            return { ...t, status: 'available', occupied_at: null };
           }
           return t;
         })
       );
-      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: 'COMPLETED' } : o)));
+      setOrders((prev) =>
+        prev.map((o) => (String(o.id) === String(orderId) ? { ...o, status: 'COMPLETED' } : o))
+      );
 
       if (shouldClose) {
         setSelectedTable(null);
         setIsAddingItems(false);
         setIsCreatingDirectOrder(false);
         setAdditionalItems([]);
+      }
+
+      if (String(orderId).startsWith('TBL-')) {
+        if (targetTableId != null) {
+          await authorizedFetch(`${API_BASE}/tables/${targetTableId}/release?hotelId=${hotelId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          }).catch(() => {});
+        }
+        toast.success('✅ Table settled & marked AVAILABLE.');
+        await fetchOrders();
+        await fetchTables();
+        fetchSales();
+        return;
       }
 
       const res = await authorizedFetch(`${API_BASE}/orders/pay/${orderId}?hotelId=${hotelId}`, {
@@ -1218,20 +1335,21 @@ export default function OrdersPage() {
       });
       const data = await res.json();
       if (data.success) {
-        fetchTables();
-        fetchOrders();
+        toast.success('✅ Bill settled & table is now AVAILABLE.');
+        await fetchOrders();
+        await fetchTables();
         fetchSales();
       } else {
         toast.error(data.message || 'Failed to complete payment.');
-        fetchTables();
-        fetchOrders();
+        await fetchOrders();
+        await fetchTables();
         fetchSales();
       }
     } catch (err) {
       console.error('Failed to checkout:', err);
       toast.error('Failed to connect to server to complete payment.');
-      fetchTables();
-      fetchOrders();
+      await fetchOrders();
+      await fetchTables();
       fetchSales();
     }
   };
@@ -1269,7 +1387,7 @@ export default function OrdersPage() {
       grandTotal: grandTotalValue
     };
 
-    if (order.status !== 'COMPLETED') {
+    if (String(order.status || '').toUpperCase() !== 'COMPLETED') {
       await handleCompletePayment(order.id, false);
     }
 
@@ -1283,7 +1401,7 @@ export default function OrdersPage() {
 
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
 
       const res = await authorizedFetch(`${API_BASE}/orders/${orderId}?hotelId=${hotelId}`, {
         method: 'DELETE',
@@ -1298,8 +1416,8 @@ export default function OrdersPage() {
           style: { borderRadius: '10px', background: '#333', color: '#fff' }
         });
         setSelectedTable(null);
-        fetchTables();
-        fetchOrders();
+        await fetchOrders();
+        await fetchTables();
         fetchSales();
       } else {
         throw new Error(data.message || `Server returned ${res.status} (${res.statusText})`);
@@ -1416,7 +1534,7 @@ export default function OrdersPage() {
 
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
       const tableName = billData.tableNumber ? billData.tableNumber.split(' (')[0] : 'Table';
 
       const response = await fetch(`${API_BASE}/bills/print?hotelId=${hotelId}`, {
@@ -1487,7 +1605,7 @@ export default function OrdersPage() {
       address: systemSettings.branding.address,
       phone: systemSettings.branding.phone,
       gstNumber: systemSettings.billing.gstNumber,
-      tableNumber: `${table.table_code || table.table_name} (${table.section_name})`,
+      tableNumber: `${table.table_code || table.table_name} (${table.section_name || 'MAIN'})`,
       cashierName: 'Counter',
       captainName: order.captain_name || 'ADMIN',
       orderId: `ORD-${order.id}`,
@@ -1509,14 +1627,14 @@ export default function OrdersPage() {
 
   const handleRejectRequest = async (table) => {
     try {
-      setCaptainRequests((prev) => prev.filter((r) => r.table_id !== table.id));
+      setCaptainRequests((prev) => prev.filter((r) => String(r.table_id) !== String(table.id)));
       setTables((prev) =>
-        prev.map((t) => (t.id === table.id ? { ...t, status: 'available', occupied_at: null } : t))
+        prev.map((t) => (String(t.id) === String(table.id) ? { ...t, status: 'available', occupied_at: null } : t))
       );
 
       const hotelId = localStorage.getItem('mejwani_hotel_id') || '';
       const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
-      const res = await fetch(`${API_BASE}/customer/reject-captain-request${hotelParam}`, {
+      const res = await authorizedFetch(`${API_BASE}/customer/reject-captain-request${hotelParam}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tableId: table.id })
@@ -1535,34 +1653,39 @@ export default function OrdersPage() {
   };
 
   const getTableDisplayStatus = (table) => {
-    const order = orders.find(
-      (o) => o.table_id === table.id && o.status !== 'COMPLETED' && o.status !== 'CANCELLED'
-    );
+    const order = findActiveOrderForTable(table);
     if (order) {
-      return order.status === 'BILL_PENDING' ? 'bill_pending' : 'occupied';
+      const oStatus = String(order.status || '').toUpperCase();
+      return oStatus === 'BILL_PENDING' ? 'bill_pending' : 'occupied';
     }
+    const rawTableStatus = String(table.status || '').toLowerCase();
+    if (rawTableStatus === 'bill_pending') return 'bill_pending';
+    if (rawTableStatus === 'occupied' || rawTableStatus === 'busy' || rawTableStatus === 'running') {
+      return 'occupied';
+    }
+
     const hasActiveRequest = captainRequests.some(
-      (r) => r.table_id === table.id && (r.status === 'CAPTAIN_REQUESTED' || r.status === 'PENDING')
+      (r) => String(r.table_id) === String(table.id) && (r.status === 'CAPTAIN_REQUESTED' || r.status === 'PENDING')
     );
-    if (hasActiveRequest && table.status === 'available') {
+    if (hasActiveRequest && rawTableStatus === 'available') {
       return 'customer_present';
     }
-    return table.status;
+    return rawTableStatus || 'available';
   };
 
   const getStatusBadge = (status) => {
     switch (status) {
       case 'occupied':
         return (
-          <span className="inline-flex items-center gap-1 py-0.5 px-2.5 rounded-full bg-rose-500/10 border border-rose-500/20 text-[8px] font-black uppercase text-rose-500 tracking-wider">
-            <span className="w-1 h-1 bg-rose-500 rounded-full animate-ping" />
-            OCCUPIED
+          <span className="inline-flex items-center gap-1 py-0.5 px-2.5 rounded-full bg-rose-600/15 border border-rose-600/35 text-[8px] font-black uppercase text-rose-600 dark:text-rose-400 tracking-wider">
+            <span className="w-1.5 h-1.5 bg-rose-600 rounded-full animate-ping" />
+            OCCUPIED · BUSY
           </span>
         );
       case 'bill_pending':
         return (
-          <span className="inline-flex items-center gap-1 py-0.5 px-2.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[8px] font-black uppercase text-amber-500 tracking-wider">
-            <span className="w-1 h-1 bg-amber-500 rounded-full animate-pulse" />
+          <span className="inline-flex items-center gap-1 py-0.5 px-2.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-[8px] font-black uppercase text-amber-600 dark:text-amber-400 tracking-wider">
+            <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
             BILL PENDING
           </span>
         );
@@ -1584,17 +1707,17 @@ export default function OrdersPage() {
   };
 
   const getTableColorClass = (table) => {
-    const isSelected = selectedTableLive?.id === table.id;
+    const isSelected = selectedTableLive && String(selectedTableLive.id) === String(table.id);
     const displayStatus = getTableDisplayStatus(table);
 
     if (displayStatus === 'occupied') {
       return isSelected
-        ? 'bg-rose-100 dark:bg-rose-950/40 border-rose-500 text-rose-900 dark:text-rose-200 shadow-md ring-2 ring-rose-500/30'
-        : 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-500/30 dark:border-rose-500/10 text-rose-800 dark:text-rose-400 hover:border-rose-500/60 shadow-sm';
+        ? 'bg-rose-200 dark:bg-rose-900/60 border-2 border-rose-600 text-rose-950 dark:text-rose-100 shadow-lg ring-2 ring-rose-600/40'
+        : 'bg-rose-100 dark:bg-rose-950/45 border-2 border-rose-500 text-rose-900 dark:text-rose-200 hover:bg-rose-200/80 dark:hover:bg-rose-900/50 hover:border-rose-600 shadow-md';
     } else if (displayStatus === 'bill_pending') {
       return isSelected
-        ? 'bg-amber-100 dark:bg-amber-950/40 border-amber-500 text-amber-900 dark:text-amber-200 shadow-md ring-2 ring-amber-500/30'
-        : 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-500/30 dark:border-amber-500/10 text-amber-800 dark:text-amber-400 hover:border-amber-500/60 shadow-sm';
+        ? 'bg-amber-100 dark:bg-amber-950/40 border-2 border-amber-500 text-amber-900 dark:text-amber-200 shadow-md ring-2 ring-amber-500/30'
+        : 'bg-amber-50/90 dark:bg-amber-950/25 border-2 border-amber-500/50 text-amber-800 dark:text-amber-300 hover:border-amber-500 shadow-sm';
     } else if (displayStatus === 'customer_present') {
       return isSelected
         ? 'bg-orange-100 dark:bg-orange-950/40 border-orange-500 text-orange-900 dark:text-orange-200 shadow-md ring-2 ring-orange-500/30 animate-pulse'
@@ -1609,7 +1732,6 @@ export default function OrdersPage() {
   return (
     <AdminLayout>
       <div className="-mt-6 space-y-4 w-full max-w-full overflow-visible">
-        {/* Issued Bills Option */}
         <div className="flex justify-end items-center mb-1">
           <button
             type="button"
@@ -1621,9 +1743,7 @@ export default function OrdersPage() {
           </button>
         </div>
 
-        {/* Dashboard layout */}
         <div className="flex flex-col lg:flex-row gap-6 h-auto w-full overflow-visible">
-          {/* Left: Interactive Section Layout & Tables Grid */}
           <div className="w-full flex flex-col pr-2 overflow-visible">
             {loading ? (
               <div className="space-y-6 max-w-full">
@@ -1686,9 +1806,7 @@ export default function OrdersPage() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                       {tablesByArea[area]?.map((table) => {
                         const displayStatus = getTableDisplayStatus(table);
-                        const order = orders.find(
-                          (o) => o.table_id === table.id && o.status !== 'COMPLETED' && o.status !== 'CANCELLED'
-                        );
+                        const order = getTableFallbackOrder(table);
                         const isOccupied =
                           displayStatus === 'occupied' || displayStatus === 'bill_pending' || !!order;
                         const isCustomerPresent = displayStatus === 'customer_present';
@@ -1713,12 +1831,11 @@ export default function OrdersPage() {
                         return (
                           <div
                             key={table.id}
-                            onClick={() => setSelectedTable(table)}
+                            onClick={() => handleSelectTableCard(table)}
                             className={`p-4 rounded-2xl border transition-all duration-300 flex flex-col justify-between items-center text-center min-h-[110px] cursor-pointer ${getTableColorClass(
                               table
                             )}`}
                           >
-                            {/* Top part: Elapsed Time or Reject button */}
                             <div className="text-[10px] font-black uppercase tracking-wider min-h-[16px] w-full flex justify-center">
                               {isCustomerPresent ? (
                                 <button
@@ -1739,21 +1856,24 @@ export default function OrdersPage() {
                               ) : null}
                             </div>
 
-                            {/* Middle part: Table Name */}
                             <div className="text-2xl font-black tracking-tight mt-1">{table.table_name}</div>
 
-                            {/* Status Badge */}
                             <div className="my-1.5">{getStatusBadge(displayStatus)}</div>
 
-                            {/* Bottom part: Amount & Save Icon */}
                             <div className="w-full flex items-center justify-between h-5 text-xs font-black">
                               {isOccupied && order ? (
                                 <>
-                                  <span className="text-emerald-700 dark:text-emerald-300">
+                                  <span className="text-rose-700 dark:text-rose-300">
                                     {formatCurrency(cardGrandTotal, 0)}
                                   </span>
-                                  <Save className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 opacity-80" />
+                                  <span className="text-[9px] uppercase tracking-wider text-rose-700 dark:text-rose-300 underline">
+                                    BILL
+                                  </span>
                                 </>
+                              ) : isOccupied ? (
+                                <span className="text-[9px] uppercase tracking-wider text-rose-700 dark:text-rose-300 mx-auto">
+                                  TAP FOR BILL
+                                </span>
                               ) : (
                                 <div />
                               )}
@@ -1768,7 +1888,6 @@ export default function OrdersPage() {
             )}
           </div>
 
-          {/* Centered Modal: Live checkout invoice panel */}
           {selectedTableLive && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
               <div
@@ -1788,7 +1907,6 @@ export default function OrdersPage() {
               >
                 {isAddingItems || isCreatingDirectOrder ? (
                   <>
-                    {/* Header */}
                     <div className="p-5 border-b border-slate-100 dark:border-white/5 flex items-center gap-3 bg-slate-50/50 dark:bg-white/2">
                       <button
                         type="button"
@@ -1811,7 +1929,7 @@ export default function OrdersPage() {
                         </h3>
                         <p className="text-[9px] font-black text-slate-400 dark:text-white/30 uppercase tracking-widest mt-0.5">
                           {isCreatingDirectOrder
-                            ? `${selectedTableLive.table_name} · ${selectedTableLive.section_name} · Direct Billing`
+                            ? `${selectedTableLive.table_name} · ${selectedTableLive.section_name || 'MAIN'} · Direct Billing`
                             : `INV-${activeOrderForSelectedTable?.id} · ${selectedTableLive.table_name} · Same Session`}
                         </p>
                       </div>
@@ -1834,9 +1952,7 @@ export default function OrdersPage() {
                       </button>
                     </div>
 
-                    {/* Menu Selector Body */}
                     <div className="flex-1 flex flex-col lg:flex-row overflow-hidden" style={{ minHeight: 0 }}>
-                      {/* Left: Menu Grid / Table */}
                       <div className="flex-1 flex flex-col overflow-hidden border-r border-slate-100 dark:border-white/5">
                         <div className="p-4 space-y-2 border-b border-slate-100 dark:border-white/5 flex-shrink-0">
                           <div className="flex gap-2">
@@ -2119,7 +2235,6 @@ export default function OrdersPage() {
                         </div>
                       </div>
 
-                      {/* Right: Selected Items Cart */}
                       <div className="w-full lg:w-96 flex flex-col flex-shrink-0 border-t lg:border-t-0 border-slate-100 dark:border-white/5">
                         <div className="p-4 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
                           <span className="text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-widest">
@@ -2213,7 +2328,7 @@ export default function OrdersPage() {
                                               );
                                             }}
                                             placeholder="Add prep note (e.g. 2 Roti, 2 Bhakari)..."
-                                            className="w-full px-2 py-1 bg-slate-50 dark:bg-white/5 border border-slate-205 dark:border-white/10 rounded-lg text-[9px] text-slate-800 dark:text-white placeholder-slate-400/60 font-bold focus:outline-none focus:border-[#ff6b00] transition-all"
+                                            className="w-full px-2 py-1 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[9px] text-slate-800 dark:text-white placeholder-slate-400/60 font-bold focus:outline-none focus:border-[#ff6b00] transition-all"
                                           />
                                         </div>
                                       </td>
@@ -2249,7 +2364,6 @@ export default function OrdersPage() {
                           )}
                         </div>
 
-                        {/* Cart footer */}
                         {additionalItems.length > 0 && (
                           <div className="p-4 border-t border-slate-100 dark:border-white/5 space-y-3">
                             <div className="flex justify-between text-xs font-black text-slate-800 dark:text-white">
@@ -2318,7 +2432,6 @@ export default function OrdersPage() {
                   </>
                 ) : (
                   <>
-                    {/* DEFAULT BILLING MODAL VIEW */}
                     <div className="flex justify-end p-4 pb-0 bg-white dark:bg-[#0d0d0d]">
                       <button
                         type="button"
@@ -2329,12 +2442,10 @@ export default function OrdersPage() {
                       </button>
                     </div>
 
-                    {/* TWO-COLUMN CHECKOUT PANEL */}
                     <div
                       className="flex-1 flex flex-col md:flex-row overflow-hidden bg-white dark:bg-[#0d0d0d] p-6 gap-6"
                       style={{ minHeight: 0 }}
                     >
-                      {/* Left Column: Bill Receipt Summary */}
                       <div className="md:w-[45%] flex flex-col h-full border border-slate-200/60 dark:border-white/5 rounded-2xl bg-slate-50 dark:bg-white/2 p-5 overflow-hidden">
                         <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-white/30 mb-3">
                           Bill Receipt
@@ -2342,7 +2453,6 @@ export default function OrdersPage() {
                         <div className="flex-1 overflow-y-auto pr-1">
                           {checkoutOrder ? (
                             <div className="flex flex-col space-y-4 h-full">
-                              {/* Bill Info Grid */}
                               <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-xl p-4">
                                 <div className="space-y-1">
                                   <span className="text-slate-400 dark:text-white/30 uppercase text-[9px] font-black tracking-wider block">
@@ -2372,7 +2482,6 @@ export default function OrdersPage() {
                                 </div>
                               </div>
 
-                              {/* Ordered Items Table */}
                               <div className="flex-1 bg-white dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-xl overflow-hidden min-h-0 flex flex-col">
                                 <div className="overflow-y-auto flex-1">
                                   <table className="w-full text-left border-collapse">
@@ -2397,7 +2506,7 @@ export default function OrdersPage() {
                                               </span>
                                               {item.note && (
                                                 <span className="text-[9px] text-amber-500 italic block mt-0.5">
-                                                  - Note: {item.note}
+                                                  * Note: {item.note}
                                                 </span>
                                               )}
                                             </td>
@@ -2417,7 +2526,6 @@ export default function OrdersPage() {
                                 </div>
                               </div>
 
-                              {/* Calculations Breakdown */}
                               <div className="space-y-2.5 bg-slate-50 dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-xl p-4 text-xs font-bold text-slate-600 dark:text-slate-300">
                                 <div className="flex justify-between">
                                   <span className="text-slate-400 uppercase tracking-wider text-[10px]">
@@ -2483,9 +2591,7 @@ export default function OrdersPage() {
                         </div>
                       </div>
 
-                      {/* Right Column: Checkout Controls & Action Buttons */}
                       <div className="flex-1 flex flex-col h-full justify-between border border-slate-200/60 dark:border-white/5 rounded-2xl p-5 bg-white dark:bg-white/[0.01]">
-                        {/* Top: Payment Mode */}
                         <div className="space-y-4">
                           <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-white/30">
                             Checkout Settings
@@ -2516,7 +2622,6 @@ export default function OrdersPage() {
                           )}
                         </div>
 
-                        {/* Bottom: Action Buttons */}
                         {checkoutOrder ? (
                           <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-white/5">
                             <div className="flex flex-col sm:flex-row gap-3">
@@ -2546,7 +2651,7 @@ export default function OrdersPage() {
                             <div className="flex flex-col sm:flex-row gap-3">
                               <button
                                 type="button"
-                                disabled={checkoutOrder.status === 'COMPLETED'}
+                                disabled={String(checkoutOrder.status || '').toUpperCase() === 'COMPLETED'}
                                 onClick={() => handleCancelBill(checkoutOrder.id)}
                                 className="flex-1 px-4 py-3 bg-slate-500 hover:bg-slate-600 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               >
@@ -2554,7 +2659,7 @@ export default function OrdersPage() {
                               </button>
                               <button
                                 type="button"
-                                disabled={checkoutOrder.status === 'COMPLETED'}
+                                disabled={String(checkoutOrder.status || '').toUpperCase() === 'COMPLETED'}
                                 onClick={openAddMoreItems}
                                 className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/50 text-emerald-600 dark:text-emerald-400 rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               >
@@ -2575,7 +2680,7 @@ export default function OrdersPage() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  if (checkoutOrder.status === 'COMPLETED') {
+                                  if (String(checkoutOrder.status || '').toUpperCase() === 'COMPLETED') {
                                     setSelectedTable(null);
                                     setIsAddingItems(false);
                                     setIsCreatingDirectOrder(false);
@@ -2586,7 +2691,7 @@ export default function OrdersPage() {
                                 }}
                                 className="w-full sm:w-auto px-8 py-3.5 bg-rose-800 hover:bg-rose-900 text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg shadow-rose-800/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
                               >
-                                {checkoutOrder.status === 'COMPLETED' ? 'Close' : 'Settle & Save'}
+                                {String(checkoutOrder.status || '').toUpperCase() === 'COMPLETED' ? 'Close' : 'Settle & Save'}
                               </button>
                             </div>
                           </div>
@@ -2620,7 +2725,6 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* Digital E-Bill Receipt Modal */}
       {eBillModalData && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm">
           <div className="relative w-full max-w-md bg-white dark:bg-[#111] border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
