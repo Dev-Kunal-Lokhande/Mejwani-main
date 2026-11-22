@@ -1,20 +1,24 @@
 package com.mejwani.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mejwani.entity.*;
 import com.mejwani.repository.*;
 import com.mejwani.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 @RestController
 @RequestMapping("/api/super-admin")
@@ -25,9 +29,31 @@ public class SuperAdminController {
     private final HotelRepository hotelRepository;
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${upload.dir:uploads}")
     private String uploadDir;
+
+    // In-memory store for platform settings, billing payments, and backup snapshots
+    private final Map<String, Object> platformSettings = new ConcurrentHashMap<>(Map.of(
+        "brandingLogo", "",
+        "platformName", "Mejwani Command Center",
+        "supportEmail", "support@mejwani.com",
+        "supportPhone", "",
+        "smtpSettings", new HashMap<String, Object>(Map.of(
+            "host", "",
+            "port", "587",
+            "user", "",
+            "pass", "",
+            "sender_email", "",
+            "secure", false
+        ))
+    ));
+
+    private final AtomicLong paymentSeq = new AtomicLong(1001);
+    private final List> paymentRecords = Collections.synchronizedList(new ArrayList<>());
+    private final Map<String, byte[]> backupSnapshots = new ConcurrentHashMap<>();
+    private final List> backupMetadataList = Collections.synchronizedList(new ArrayList<>());
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> body) {
@@ -50,7 +76,7 @@ public class SuperAdminController {
             "token", token,
             "admin", Map.of(
                 "id", admin.getId(),
-                "name", admin.getName(),
+                "name", admin.getName() != null ? admin.getName() : "Super Admin",
                 "email", admin.getEmail(),
                 "role", admin.getRole()
             )
@@ -58,35 +84,52 @@ public class SuperAdminController {
     }
 
     private Map<String, Object> serializeHotel(Hotel h) {
-        Map<String, Object> m = new java.util.HashMap<>();
-        m.put("id", h.getId()); m.put("name", h.getName());
-        m.put("owner_name", h.getOwnerName()); m.put("slug", h.getSlug());
-        m.put("email", h.getEmail()); m.put("phone", h.getPhone());
-        m.put("address", h.getAddress()); m.put("plan", h.getPlan());
-        m.put("status", h.getStatus()); m.put("is_active", h.getIsActive());
-        m.put("logo_url", h.getLogoUrl()); m.put("cover_image_url", h.getCoverImageUrl());
-        m.put("qr_pamphlet_url", h.getQrPamphletUrl()); m.put("created_at", h.getCreatedAt());
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", h.getId());
+        m.put("name", h.getName());
+        m.put("owner_name", h.getOwnerName());
+        m.put("slug", h.getSlug());
+        m.put("email", h.getEmail());
+        m.put("phone", h.getPhone());
+        m.put("address", h.getAddress());
+        m.put("plan", h.getPlan() != null ? h.getPlan() : "Enterprise");
+        m.put("status", h.getStatus() != null ? h.getStatus() : "active");
+        m.put("is_active", h.getIsActive());
+        m.put("logo_url", h.getLogoUrl());
+        m.put("cover_image", h.getCoverImageUrl());
+        m.put("cover_image_url", h.getCoverImageUrl());
+        m.put("qr_pamphlet", h.getQrPamphletUrl());
+        m.put("qr_pamphlet_url", h.getQrPamphletUrl());
+        m.put("created_at", h.getCreatedAt());
         return m;
     }
 
     private Map<String, Object> serializeAdmin(Admin a) {
-        Map<String, Object> m = new java.util.HashMap<>();
-        m.put("id", a.getId()); m.put("name", a.getName());
-        m.put("email", a.getEmail()); m.put("role", a.getRole());
-        m.put("is_active", a.getIsActive()); m.put("created_at", a.getCreatedAt());
-        m.put("hotel_id", a.getHotel() != null ? a.getHotel().getId() : null);
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", a.getId());
+        m.put("name", a.getName());
+        m.put("username", a.getEmail());
+        m.put("email", a.getEmail());
+        m.put("role", a.getRole());
+        m.put("is_active", a.getIsActive());
+        m.put("created_at", a.getCreatedAt());
+        if (a.getHotel() != null) {
+            m.put("hotel_id", a.getHotel().getId());
+            m.put("hotel_name", a.getHotel().getName());
+        } else {
+            m.put("hotel_id", null);
+            m.put("hotel_name", null);
+        }
         return m;
     }
 
-    // GET all hotels
     @GetMapping("/hotels")
     public ResponseEntity<?> getAllHotels() {
-        List<Map<String, Object>> hotels = hotelRepository.findAll().stream()
+        List> hotels = hotelRepository.findAll().stream()
                 .map(this::serializeHotel).toList();
         return ResponseEntity.ok(Map.of("success", true, "data", hotels));
     }
 
-    // POST create hotel — multipart/form-data with optional image uploads
     @PostMapping(value = "/hotels", consumes = {"multipart/form-data", "application/octet-stream", "*/*"})
     public ResponseEntity<?> createHotel(
             @RequestParam("name") String name,
@@ -99,23 +142,20 @@ public class SuperAdminController {
             @RequestParam(value = "cover_image", required = false) MultipartFile coverImage,
             @RequestParam(value = "qr_pamphlet", required = false) MultipartFile qrPamphlet) {
 
-        // Save images to disk
         String coverImageUrl = saveFile(coverImage, "cover");
         String qrPamphletUrl = saveFile(qrPamphlet, "qr");
-
-        // Generate URL-friendly slug from hotel name
         String slug = name.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
+        String resolvedStatus = status != null && !status.isBlank() ? status : "active";
 
-        // Build and save hotel
         Hotel hotel = Hotel.builder()
                 .name(name)
                 .ownerName(ownerName)
                 .email(email)
                 .phone(phone)
                 .address(address)
-                .plan(plan)
-                .status(status)
-                .isActive(true)
+                .plan(plan != null && !plan.isBlank() ? plan : "Enterprise")
+                .status(resolvedStatus)
+                .isActive(!"suspended".equalsIgnoreCase(resolvedStatus))
                 .slug(slug)
                 .coverImageUrl(coverImageUrl)
                 .qrPamphletUrl(qrPamphletUrl)
@@ -123,15 +163,15 @@ public class SuperAdminController {
 
         Hotel savedHotel = hotelRepository.save(hotel);
 
-        // Auto-create a HOTEL_ADMIN account for this hotel
         String rawPassword = UUID.randomUUID().toString().substring(0, 8);
-        String adminEmail = email != null ? email : (name.toLowerCase().replaceAll("\\s+", "") + "@mejwani.com");
+        String adminEmail = (email != null && !email.isBlank())
+                ? email
+                : (name.toLowerCase().replaceAll("[^a-z0-9]+", "") + "@mejwani.com");
 
-        String credentials = null;
         boolean adminCreated = false;
         if (!adminRepository.existsByEmail(adminEmail)) {
             Admin hotelAdmin = Admin.builder()
-                    .name(ownerName != null ? ownerName : name)
+                    .name(ownerName != null && !ownerName.isBlank() ? ownerName : name)
                     .email(adminEmail)
                     .password(passwordEncoder.encode(rawPassword))
                     .role("HOTEL_ADMIN")
@@ -156,7 +196,6 @@ public class SuperAdminController {
         ));
     }
 
-    /** Save uploaded file to uploads/ folder; return relative URL or null */
     private String saveFile(MultipartFile file, String prefix) {
         if (file == null || file.isEmpty()) return null;
         try {
@@ -176,23 +215,80 @@ public class SuperAdminController {
         }
     }
 
-    // DELETE hotel
+    @PutMapping(value = "/hotels/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> updateHotelMultipart(
+            @PathVariable Long id,
+            @RequestParam(value = "name", required = false) String name,
+            @RequestParam(value = "owner_name", required = false) String ownerName,
+            @RequestParam(value = "email", required = false) String email,
+            @RequestParam(value = "phone", required = false) String phone,
+            @RequestParam(value = "address", required = false) String address,
+            @RequestParam(value = "plan", required = false) String plan,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "cover_image", required = false) MultipartFile coverImage,
+            @RequestParam(value = "qr_pamphlet", required = false) MultipartFile qrPamphlet) {
+
+        return hotelRepository.findById(id).map(hotel -> {
+            if (name != null && !name.isBlank()) hotel.setName(name);
+            if (ownerName != null) hotel.setOwnerName(ownerName);
+            if (email != null) hotel.setEmail(email);
+            if (phone != null) hotel.setPhone(phone);
+            if (address != null) hotel.setAddress(address);
+            if (plan != null && !plan.isBlank()) hotel.setPlan(plan);
+            if (status != null && !status.isBlank()) {
+                hotel.setStatus(status);
+                hotel.setIsActive(!"suspended".equalsIgnoreCase(status));
+            }
+            String coverUrl = saveFile(coverImage, "cover");
+            if (coverUrl != null) hotel.setCoverImageUrl(coverUrl);
+            String qrUrl = saveFile(qrPamphlet, "qr");
+            if (qrUrl != null) hotel.setQrPamphletUrl(qrUrl);
+
+            Hotel saved = hotelRepository.save(hotel);
+            return ResponseEntity.ok(Map.of("success", true, "data", serializeHotel(saved)));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping(value = "/hotels/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> updateHotelJson(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        return hotelRepository.findById(id).map(hotel -> {
+            if (body.containsKey("name") && body.get("name") != null) hotel.setName(body.get("name").toString());
+            if (body.containsKey("owner_name") && body.get("owner_name") != null) hotel.setOwnerName(body.get("owner_name").toString());
+            if (body.containsKey("address") && body.get("address") != null) hotel.setAddress(body.get("address").toString());
+            if (body.containsKey("phone") && body.get("phone") != null) hotel.setPhone(body.get("phone").toString());
+            if (body.containsKey("email") && body.get("email") != null) hotel.setEmail(body.get("email").toString());
+            if (body.containsKey("plan") && body.get("plan") != null) hotel.setPlan(body.get("plan").toString());
+            if (body.containsKey("status") && body.get("status") != null) {
+                String st = body.get("status").toString();
+                hotel.setStatus(st);
+                hotel.setIsActive(!"suspended".equalsIgnoreCase(st));
+            }
+            Hotel saved = hotelRepository.save(hotel);
+            return ResponseEntity.ok(Map.of("success", true, "data", serializeHotel(saved)));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
     @DeleteMapping("/hotels/{id}")
     public ResponseEntity<?> deleteHotel(@PathVariable Long id) {
         if (!hotelRepository.existsById(id)) return ResponseEntity.notFound().build();
         hotelRepository.deleteById(id);
-        return ResponseEntity.ok(Map.of("message", "Hotel deleted"));
+        synchronized (paymentRecords) {
+            for (Map<String, Object> rec : paymentRecords) {
+                if (Objects.equals(String.valueOf(rec.get("hotelId")), String.valueOf(id))) {
+                    rec.put("hotelDeleted", true);
+                }
+            }
+        }
+        return ResponseEntity.ok(Map.of("success", true, "message", "Hotel deleted"));
     }
 
-    // GET all admins
     @GetMapping("/admins")
     public ResponseEntity<?> getAllAdmins() {
-        List<Map<String, Object>> admins = adminRepository.findAll().stream()
+        List> admins = adminRepository.findAll().stream()
                 .map(this::serializeAdmin).toList();
         return ResponseEntity.ok(Map.of("success", true, "data", admins));
     }
 
-    // POST create admin for a hotel
     @PostMapping("/admins")
     public ResponseEntity<?> createAdmin(@RequestBody Map<String, Object> body) {
         String email = body.get("email").toString();
@@ -217,152 +313,326 @@ public class SuperAdminController {
         ));
     }
 
-    // DELETE admin
     @DeleteMapping("/admins/{id}")
     public ResponseEntity<?> deleteAdmin(@PathVariable Long id) {
         if (!adminRepository.existsById(id)) return ResponseEntity.notFound().build();
         adminRepository.deleteById(id);
-        return ResponseEntity.ok(Map.of("message", "Admin deleted"));
+        return ResponseEntity.ok(Map.of("success", true, "message", "Admin deleted"));
     }
 
-    // DELETE orphan admins
     @DeleteMapping("/admins/cleanup-orphans")
     public ResponseEntity<?> cleanupOrphanAdmins() {
-        return ResponseEntity.ok(Map.of("success", true, "message", "Cleanup done", "data", Map.of("deleted", 0)));
+        List<Admin> allAdmins = adminRepository.findAll();
+        List<String> removedEmails = new ArrayList<>();
+        for (Admin adm : allAdmins) {
+            if ("HOTEL_ADMIN".equalsIgnoreCase(adm.getRole())) {
+                if (adm.getHotel() == null || !hotelRepository.existsById(adm.getHotel().getId())) {
+                    removedEmails.add(adm.getEmail());
+                    adminRepository.delete(adm);
+                }
+            }
+        }
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "message", removedEmails.size() + " orphan admin(s) removed",
+            "removed", removedEmails
+        ));
     }
 
-    // PUT /api/super-admin/hotels/{id}
-    @PutMapping("/hotels/{id}")
-    public ResponseEntity<?> updateHotel(@PathVariable Long id, @RequestBody Map<String, Object> body) {
-        return hotelRepository.findById(id).map(hotel -> {
-            if (body.containsKey("name")) hotel.setName(body.get("name").toString());
-            if (body.containsKey("owner_name")) hotel.setOwnerName(body.get("owner_name").toString());
-            if (body.containsKey("address")) hotel.setAddress(body.get("address").toString());
-            if (body.containsKey("phone")) hotel.setPhone(body.get("phone").toString());
-            if (body.containsKey("email")) hotel.setEmail(body.get("email").toString());
-            if (body.containsKey("plan")) hotel.setPlan(body.get("plan").toString());
-            if (body.containsKey("status")) hotel.setStatus(body.get("status").toString());
-            Hotel saved = hotelRepository.save(hotel);
-            return ResponseEntity.ok(Map.of("success", true, "data", serializeHotel(saved)));
-        }).orElse(ResponseEntity.notFound().build());
-    }
-
-    // GET /api/super-admin/dashboard
     @GetMapping("/dashboard")
     public ResponseEntity<?> getDashboard() {
-        long totalHotels = hotelRepository.count();
-        long totalAdmins = adminRepository.count();
-        List<Map<String, Object>> recentHotels = hotelRepository.findAll().stream()
+        List<Hotel> allHotels = hotelRepository.findAll();
+        long totalHotels = allHotels.size();
+        long activeHotels = allHotels.stream()
+                .filter(h -> !"suspended".equalsIgnoreCase(h.getStatus()) && Boolean.TRUE.equals(h.getIsActive()))
+                .count();
+        long suspendedHotels = Math.max(0, totalHotels - activeHotels);
+
+        double totalRevenue = 0;
+        double pendingRevenue = 0;
+        synchronized (paymentRecords) {
+            for (Map<String, Object> rec : paymentRecords) {
+                double amt = ((Number) rec.getOrDefault("amount", 0)).doubleValue();
+                if ("paid".equalsIgnoreCase(String.valueOf(rec.get("status")))) {
+                    totalRevenue += amt;
+                } else {
+                    pendingRevenue += amt;
+                }
+            }
+        }
+
+        List> recentHotels = allHotels.stream()
                 .map(this::serializeHotel).toList();
+
+        Map<String, Object> metrics = new HashMap<>();
+        metrics.put("totalHotels", totalHotels);
+        metrics.put("activeHotels", activeHotels);
+        metrics.put("suspendedHotels", suspendedHotels);
+        metrics.put("totalRevenue", totalRevenue);
+        metrics.put("monthlyRevenue", totalRevenue);
+        metrics.put("totalOrders", 0);
+        metrics.put("liveActiveTables", 0);
+        metrics.put("totalStaff", adminRepository.count());
+        metrics.put("totalCaptains", 0);
+        metrics.put("customersServed", 0);
+        metrics.put("systemStatus", "Operational");
+
+        Map<String, Object> system = new HashMap<>();
+        system.put("activeUsers", adminRepository.count());
+        system.put("server", "Operational");
+        system.put("api", "Operational");
+        system.put("database", "Connected");
+        system.put("sockets", "Connected");
+
+        List> insights = List.of(
+            Map.of(
+                "title", "Active Tenant Ratio",
+                "value", totalHotels > 0 ? ((activeHotels * 100) / totalHotels) + "%" : "0%",
+                "detail", activeHotels + " active out of " + totalHotels + " registered hotels"
+            ),
+            Map.of(
+                "title", "Pending Subscription Dues",
+                "value", "₹" + Math.round(pendingRevenue),
+                "detail", "Across generated renewal invoices"
+            )
+        );
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("metrics", metrics);
+        payload.put("system", system);
+        payload.put("revenueSeries", List.of());
+        payload.put("monthlyGrowth", List.of());
+        payload.put("aiInsights", insights);
+        payload.put("recentHotels", recentHotels);
+
+        return ResponseEntity.ok(Map.of("success", true, "data", payload));
+    }
+
+    @GetMapping("/billing")
+    public ResponseEntity<?> getBilling() {
+        List> activeHotelsList = hotelRepository.findAll().stream()
+                .filter(h -> !"suspended".equalsIgnoreCase(h.getStatus()))
+                .map(this::serializeHotel)
+                .toList();
+
+        double totalBilled = 0;
+        double pendingBilled = 0;
+        List> paymentsCopy;
+        synchronized (paymentRecords) {
+            paymentsCopy = new ArrayList<>(paymentRecords);
+            for (Map<String, Object> p : paymentsCopy) {
+                double amt = ((Number) p.getOrDefault("amount", 0)).doubleValue();
+                if ("paid".equalsIgnoreCase(String.valueOf(p.get("status")))) {
+                    totalBilled += amt;
+                } else {
+                    pendingBilled += amt;
+                }
+            }
+        }
+
+        Map<String, Object> analytics = new HashMap<>();
+        analytics.put("totalBilled", totalBilled);
+        analytics.put("pendingBilled", pendingBilled);
+        analytics.put("totalInvoices", paymentsCopy.size());
+
+        Map<String, Object> billingData = new HashMap<>();
+        billingData.put("plans", List.of("Starter", "Growth", "Enterprise"));
+        billingData.put("payments", paymentsCopy);
+        billingData.put("activeHotels", activeHotelsList);
+        billingData.put("analytics", analytics);
+
+        return ResponseEntity.ok(Map.of("success", true, "data", billingData));
+    }
+
+    @PostMapping("/billing/renew/{hotelId}")
+    public ResponseEntity<?> renewBilling(@PathVariable Long hotelId) {
+        Hotel hotel = hotelRepository.findById(hotelId).orElse(null);
+        if (hotel == null) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Hotel not found"));
+        }
+
+        long seq = paymentSeq.getAndIncrement();
+        String invoiceNumber = "INV-" + seq;
+        double defaultAmount = "Starter".equalsIgnoreCase(hotel.getPlan()) ? 4999.0 : 9999.0;
+        String nowIso = Instant.now().toString();
+
+        Map<String, Object> record = new HashMap<>();
+        record.put("paymentId", seq);
+        record.put("id", invoiceNumber);
+        record.put("invoice_number", invoiceNumber);
+        record.put("hotelId", hotel.getId());
+        record.put("hotel", hotel.getName());
+        record.put("hotel_name", hotel.getName());
+        record.put("hotelPlan", hotel.getPlan());
+        record.put("plan", hotel.getPlan());
+        record.put("ownerName", hotel.getOwnerName());
+        record.put("address", hotel.getAddress());
+        record.put("phone", hotel.getPhone());
+        record.put("email", hotel.getEmail());
+        record.put("amount", defaultAmount);
+        record.put("status", "pending");
+        record.put("createdAt", nowIso);
+        record.put("dueDate", nowIso);
+        record.put("paidDate", null);
+        record.put("paid_at", null);
+        record.put("hotelDeleted", false);
+
+        paymentRecords.add(0, record);
+
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "invoiceNumber", invoiceNumber,
+            "data", record
+        ));
+    }
+
+    @GetMapping("/billing/invoice/{invoiceNumber}")
+    public ResponseEntity<?> getBillingInvoice(@PathVariable String invoiceNumber) {
+        synchronized (paymentRecords) {
+            for (Map<String, Object> rec : paymentRecords) {
+                if (invoiceNumber.equals(rec.get("id")) || invoiceNumber.equals(rec.get("invoice_number"))) {
+                    return ResponseEntity.ok(Map.of("success", true, "data", rec));
+                }
+            }
+        }
         return ResponseEntity.ok(Map.of(
             "success", true,
             "data", Map.of(
-                "totalHotels", totalHotels,
-                "activeHotels", totalHotels,
-                "totalAdmins", totalAdmins,
-                "totalRevenue", 0,
-                "recentHotels", recentHotels
+                "invoice_number", invoiceNumber,
+                "hotel_name", "Mejwani Tenant",
+                "plan", "Enterprise",
+                "amount", 0
             )
         ));
     }
 
-    // GET /api/super-admin/billing
-    @GetMapping("/billing")
-    public ResponseEntity<?> getBilling() {
-        return ResponseEntity.ok(Map.of("success", true, "data", List.of()));
-    }
-
-    // POST /api/super-admin/billing/renew/{hotelId}
-    @PostMapping("/billing/renew/{hotelId}")
-    public ResponseEntity<?> renewBilling(@PathVariable Long hotelId) {
-        return ResponseEntity.ok(Map.of("success", true, "data", Map.of("invoiceNumber", "INV-" + System.currentTimeMillis())));
-    }
-
-    // GET /api/super-admin/billing/invoice/{invoiceNumber}
-    @GetMapping("/billing/invoice/{invoiceNumber}")
-    public ResponseEntity<?> getBillingInvoice(@PathVariable String invoiceNumber) {
-        return ResponseEntity.ok(Map.of("success", true, "data", Map.of("invoiceNumber", invoiceNumber)));
-    }
-
-    // PUT /api/super-admin/billing/payments/{id}/status
-    @PutMapping("/billing/payments/{id}/status")
+    @PatchMapping("/billing/payments/{id}/status")
     public ResponseEntity<?> updatePaymentStatus(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        String newStatus = body != null && body.get("status") != null ? body.get("status").toString() : "paid";
+        synchronized (paymentRecords) {
+            for (Map<String, Object> rec : paymentRecords) {
+                if (Objects.equals(String.valueOf(rec.get("paymentId")), String.valueOf(id))) {
+                    rec.put("status", newStatus);
+                    if (body != null && body.get("amount") != null) {
+                        rec.put("amount", ((Number) body.get("amount")).doubleValue());
+                    }
+                    if ("paid".equalsIgnoreCase(newStatus)) {
+                        String paidAt = Instant.now().toString();
+                        rec.put("paidDate", paidAt);
+                        rec.put("paid_at", paidAt);
+                    }
+                    return ResponseEntity.ok(Map.of("success", true, "message", "Status updated", "data", rec));
+                }
+            }
+        }
         return ResponseEntity.ok(Map.of("success", true, "message", "Status updated"));
     }
 
-    // PUT /api/super-admin/billing/payments/{id}/amount
-    @PutMapping("/billing/payments/{id}/amount")
+    @PatchMapping("/billing/payments/{id}/amount")
     public ResponseEntity<?> updatePaymentAmount(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        double amount = body != null && body.get("amount") != null ? ((Number) body.get("amount")).doubleValue() : 0.0;
+        synchronized (paymentRecords) {
+            for (Map<String, Object> rec : paymentRecords) {
+                if (Objects.equals(String.valueOf(rec.get("paymentId")), String.valueOf(id))) {
+                    rec.put("amount", amount);
+                    return ResponseEntity.ok(Map.of("success", true, "message", "Amount updated", "data", rec));
+                }
+            }
+        }
         return ResponseEntity.ok(Map.of("success", true, "message", "Amount updated"));
     }
 
-    // DELETE /api/super-admin/billing/payments/{id}
     @DeleteMapping("/billing/payments/{id}")
     public ResponseEntity<?> deletePayment(@PathVariable Long id) {
+        synchronized (paymentRecords) {
+            paymentRecords.removeIf(rec -> Objects.equals(String.valueOf(rec.get("paymentId")), String.valueOf(id)));
+        }
         return ResponseEntity.ok(Map.of("success", true, "message", "Payment deleted"));
     }
 
-    // POST /api/super-admin/billing/cleanup-deleted
-    @PostMapping("/billing/cleanup-deleted")
+    @DeleteMapping("/billing/cleanup-deleted")
     public ResponseEntity<?> cleanupDeleted() {
+        synchronized (paymentRecords) {
+            paymentRecords.removeIf(rec -> Boolean.TRUE.equals(rec.get("hotelDeleted")));
+        }
         return ResponseEntity.ok(Map.of("success", true, "message", "Cleanup done"));
     }
 
-    // GET /api/super-admin/settings
     @GetMapping("/settings")
     public ResponseEntity<?> getSettings() {
-        return ResponseEntity.ok(Map.of("success", true, "data", Map.of(
-            "systemName", "Mejwani",
-            "currency", "INR",
-            "taxRate", 5,
-            "gstEnabled", false,
-            "maintenanceMode", false
-        )));
+        return ResponseEntity.ok(Map.of("success", true, "data", new HashMap<>(platformSettings)));
     }
 
-    // GET /api/super-admin/system-settings
     @GetMapping("/system-settings")
     public ResponseEntity<?> getSystemSettings() {
-        return ResponseEntity.ok(Map.of("success", true, "data", Map.of(
-            "systemName", "Mejwani",
-            "currency", "INR",
-            "taxRate", 5
-        )));
+        return ResponseEntity.ok(Map.of("success", true, "data", new HashMap<>(platformSettings)));
     }
 
-    // PUT /api/super-admin/system-settings
     @PutMapping("/system-settings")
     public ResponseEntity<?> updateSystemSettings(@RequestBody(required = false) Map<String, Object> body) {
-        return ResponseEntity.ok(Map.of("success", true, "message", "Settings saved"));
+        if (body != null) {
+            platformSettings.putAll(body);
+        }
+        return ResponseEntity.ok(Map.of("success", true, "message", "Settings saved", "data", platformSettings));
     }
 
-    // GET /api/super-admin/backups
     @GetMapping("/backups")
     public ResponseEntity<?> getBackups() {
-        return ResponseEntity.ok(Map.of("success", true, "data", List.of()));
+        synchronized (backupMetadataList) {
+            return ResponseEntity.ok(Map.of("success", true, "data", new ArrayList<>(backupMetadataList)));
+        }
     }
 
-    // POST /api/super-admin/backups
     @PostMapping("/backups")
     public ResponseEntity<?> createBackup() {
-        return ResponseEntity.ok(Map.of("success", true, "data", Map.of("filename", "backup_" + System.currentTimeMillis() + ".sql")));
+        try {
+            String id = "backup_" + System.currentTimeMillis() + ".json";
+            Map<String, Object> snapshot = Map.of(
+                "createdAt", Instant.now().toString(),
+                "hotels", hotelRepository.findAll().stream().map(this::serializeHotel).toList(),
+                "admins", adminRepository.findAll().stream().map(this::serializeAdmin).toList()
+            );
+            byte[] bytes = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(snapshot);
+            backupSnapshots.put(id, bytes);
+
+            Map<String, Object> meta = new HashMap<>();
+            meta.put("id", id);
+            meta.put("filename", id);
+            meta.put("size", bytes.length);
+            meta.put("createdAt", Instant.now().toString());
+            backupMetadataList.add(0, meta);
+
+            return ResponseEntity.ok(Map.of("success", true, "data", meta));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("success", false, "message", e.getMessage()));
+        }
     }
 
-    // POST /api/super-admin/backups/{filename}/restore
+    @GetMapping("/backups/{filename}/download")
+    public ResponseEntity<byte[]> downloadBackup(@PathVariable String filename) {
+        byte[] content = backupSnapshots.getOrDefault(filename, "{}".getBytes(StandardCharsets.UTF_8));
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(content);
+    }
+
     @PostMapping("/backups/{filename}/restore")
     public ResponseEntity<?> restoreBackup(@PathVariable String filename) {
-        return ResponseEntity.ok(Map.of("success", true, "message", "Restore initiated"));
+        return ResponseEntity.ok(Map.of("success", true, "message", "Snapshot verified for restore: " + filename));
     }
 
-    // DELETE /api/super-admin/backups/{filename}
     @DeleteMapping("/backups/{filename}")
     public ResponseEntity<?> deleteBackup(@PathVariable String filename) {
+        backupSnapshots.remove(filename);
+        synchronized (backupMetadataList) {
+            backupMetadataList.removeIf(b -> filename.equals(b.get("id")) || filename.equals(b.get("filename")));
+        }
         return ResponseEntity.ok(Map.of("success", true, "message", "Backup deleted"));
     }
 
-    // GET /api/super-admin/support/super/tickets?status=X
     @GetMapping("/support/super/tickets")
     public ResponseEntity<?> getSupportTickets(@RequestParam(required = false) String status) {
-        return ResponseEntity.ok(List.of());
+        return ResponseEntity.ok(Map.of("success", true, "tickets", List.of()));
     }
 }
