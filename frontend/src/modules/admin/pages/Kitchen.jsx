@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Clock,
   CheckCircle2,
-  Flame,
   ChefHat,
   Timer,
   RefreshCw,
@@ -10,13 +9,64 @@ import {
   User,
   AlertCircle,
   Eye,
-  EyeOff,
-  ShoppingBag
+  EyeOff
 } from 'lucide-react';
 import axios from 'axios';
 import AdminLayout from '../../../shared/layouts/AdminLayout';
 import { API_BASE } from '../../../shared/services/apiBase';
 import socket from '../../../shared/services/socketClient';
+
+const parseTimestampToDate = (rawValue) => {
+  if (!rawValue) return null;
+  if (rawValue instanceof Date) {
+    return Number.isNaN(rawValue.getTime()) ? null : rawValue;
+  }
+  if (typeof rawValue === 'number') {
+    const ms = rawValue < 1e12 ? rawValue * 1000 : rawValue;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  const str = String(rawValue).trim();
+  if (!str) return null;
+
+  // If ISO string already has Z or +/-HH:mm offset, parse directly
+  if (/([zZ]|[+-]\d{2}:?\d{2})$/.test(str)) {
+    const d = new Date(str);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  // If SQL/ISO datetime string has no timezone (e.g. "2026-11-22 17:51:00" or "2026-11-22T17:51:00"),
+  // normalize space to 'T' and append 'Z' so UTC is interpreted consistently
+  const normalized = str.includes(' ') ? str.replace(' ', 'T') : str;
+  const utcCandidate = new Date(
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(normalized) ? `${normalized}Z` : normalized
+  );
+  if (!Number.isNaN(utcCandidate.getTime())) {
+    return utcCandidate;
+  }
+
+  const fallback = new Date(str);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+};
+
+const getOrderTimestamp = (order) => {
+  if (!order) return null;
+  return (
+    order.createdAt ||
+    order.created_at ||
+    order.kotTime ||
+    order.kot_time ||
+    order.updatedAt ||
+    order.updated_at ||
+    null
+  );
+};
+
+const formatTableLabel = (tableNo) => {
+  const clean = String(tableNo || '').replace(/^table\s*/i, '').trim();
+  return clean || 'N/A';
+};
 
 export default function AdminKitchen() {
   const [queue, setQueue] = useState([]);
@@ -25,14 +75,21 @@ export default function AdminKitchen() {
   const [error, setError] = useState(null);
   const [expandedCard, setExpandedCard] = useState(null);
   const [toast, setToast] = useState(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
 
-  // Show dynamic toast notifications
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
 
-  // Fetch the active kitchen queue (pending & cooking orders)
+  // Live 1-second tick so elapsed minutes stay accurate
+  useEffect(() => {
+    const tickInterval = setInterval(() => {
+      setNowTick(Date.now());
+    }, 1000);
+    return () => clearInterval(tickInterval);
+  }, []);
+
   const fetchQueue = async (isManual = false) => {
     if (isManual) setRefreshing(true);
     try {
@@ -43,8 +100,12 @@ export default function AdminKitchen() {
       const hParam = hotelId ? `?hotelId=${hotelId}` : '';
 
       const [ordersRes, parcelsRes] = await Promise.all([
-        axios.get(`${API_BASE}/orders/kitchen-queue${hParam}`, { headers: authHeader }).catch(() => ({ data: { success: false } })),
-        axios.get(`${API_BASE}/parcels?date=today`, { headers: authHeader }).catch(() => ({ data: { success: false } }))
+        axios
+          .get(`${API_BASE}/orders/kitchen-queue${hParam}`, { headers: authHeader })
+          .catch(() => ({ data: { success: false } })),
+        axios
+          .get(`${API_BASE}/parcels?date=today`, { headers: authHeader })
+          .catch(() => ({ data: { success: false } }))
       ]);
 
       let allQueue = [];
@@ -55,7 +116,9 @@ export default function AdminKitchen() {
             Array.isArray(order.items) &&
             order.items.length > 0 &&
             order.status &&
-            ['pending', 'cooking', 'preparing', 'new', 'sent_to_kitchen'].includes(order.status.toLowerCase()) &&
+            ['pending', 'cooking', 'preparing', 'new', 'sent_to_kitchen'].includes(
+              order.status.toLowerCase()
+            ) &&
             order.type !== 'service-request' &&
             order.category !== 'service-request' &&
             order.requestType !== 'service-request'
@@ -65,20 +128,27 @@ export default function AdminKitchen() {
       }
 
       if (parcelsRes.data && parcelsRes.data.success) {
-        const parcelData = parcelsRes.data.data.filter(p => ['pending', 'pending_kitchen', 'preparing'].includes(p.status));
-        const mappedParcels = parcelData.map(p => {
+        const parcelData = parcelsRes.data.data.filter((p) =>
+          ['pending', 'pending_kitchen', 'preparing'].includes(p.status)
+        );
+        const mappedParcels = parcelData.map((p) => {
           let pItems = [];
           if (typeof p.items === 'string') {
-            try { pItems = JSON.parse(p.items); } catch (e) {}
-          } else { pItems = p.items || []; }
+            try {
+              pItems = JSON.parse(p.items);
+            } catch (e) {}
+          } else {
+            pItems = p.items || [];
+          }
           return {
             _id: p.id || p._id,
             id: p.id || p._id,
-            tableNo: `PARCEL`,
+            tableNo: 'PARCEL',
             captain: p.customer_name || 'Walk-in',
             status: p.status === 'preparing' ? 'cooking' : 'pending',
             isParcel: true,
             parcel_id: p.parcel_id,
+            createdAt: p.created_at || p.createdAt || new Date().toISOString(),
             items: pItems
           };
         });
@@ -88,7 +158,7 @@ export default function AdminKitchen() {
       if (ordersRes.data && ordersRes.data.success) {
         setQueue(allQueue);
         setError(null);
-      } else if (!ordersRes.data || !ordersRes.data.success) {
+      } else {
         setError('Failed to fetch the kitchen preparation queue.');
       }
     } catch (err) {
@@ -100,7 +170,6 @@ export default function AdminKitchen() {
     }
   };
 
-  // Set up live tracking polling
   useEffect(() => {
     fetchQueue();
     const interval = setInterval(() => {
@@ -109,18 +178,22 @@ export default function AdminKitchen() {
     return () => clearInterval(interval);
   }, []);
 
- // Update order preparation status
   const handleUpdateStatus = async (orderId, currentStatus, tableNo, isParcel = false) => {
     const isPending = ['new', 'pending', 'sent_to_kitchen'].includes((currentStatus || '').toLowerCase());
     const uiNextStatus = isPending ? 'cooking' : 'ready';
     const apiNextStatus = isParcel
-      ? (isPending ? 'preparing' : 'ready')
-      : (isPending ? 'PREPARING' : 'READY');
+      ? isPending
+        ? 'preparing'
+        : 'ready'
+      : isPending
+      ? 'PREPARING'
+      : 'READY';
 
     const url = isParcel ? `${API_BASE}/parcels/${orderId}` : `${API_BASE}/orders/${orderId}/status`;
+    const cleanTable = formatTableLabel(tableNo);
 
     try {
-      setQueue(prev => prev.map(o => o.id === orderId ? { ...o, status: uiNextStatus } : o));
+      setQueue((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: uiNextStatus } : o)));
 
       const response = isParcel
         ? await axios.patch(url, { status: apiNextStatus })
@@ -130,13 +203,13 @@ export default function AdminKitchen() {
         if (uiNextStatus === 'ready') {
           const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
           const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
-          const currentOrder = queue.find(o => o.id === orderId);
-          
+          const currentOrder = queue.find((o) => o.id === orderId);
+
           const displayTable = isParcel
-            ? (currentOrder?.captain && currentOrder.captain !== 'Walk-in'
-                ? currentOrder.captain
-                : `Parcel ${currentOrder?.parcel_id || orderId}`)
-            : `${tableNo}`;
+            ? currentOrder?.captain && currentOrder.captain !== 'Walk-in'
+              ? currentOrder.captain
+              : `Parcel ${currentOrder?.parcel_id || orderId}`
+            : cleanTable;
 
           const readyPayload = {
             hotelId,
@@ -147,20 +220,20 @@ export default function AdminKitchen() {
             status: 'READY'
           };
 
-          // 1. Emit via Socket.IO
           socket.emit('order-ready', readyPayload);
 
-          // 2. Instant cross-tab broadcast for Admin / Orders / Captain tabs
           try {
             const bc = new BroadcastChannel('mejwani_realtime_alerts');
             bc.postMessage({ type: 'ORDER_READY', payload: readyPayload });
             bc.close();
           } catch (e) {}
 
-          showToast(`${isParcel ? displayTable : 'Table ' + displayTable} order is marked READY and dispatched!`);
-          setQueue(prev => prev.filter(o => o.id !== orderId));
+          showToast(
+            `${isParcel ? displayTable : 'Table ' + displayTable} order is marked READY and dispatched!`
+          );
+          setQueue((prev) => prev.filter((o) => o.id !== orderId));
         } else {
-          showToast(`${isParcel ? 'Parcel' : 'Table ' + tableNo} order is now COOKING!`);
+          showToast(`${isParcel ? 'Parcel' : 'Table ' + cleanTable} order is now COOKING!`);
         }
       } else {
         showToast('Error updating food preparation status.', 'error');
@@ -172,44 +245,55 @@ export default function AdminKitchen() {
       fetchQueue();
     }
   };
-  // Calculate stats
-  const pendingCount = queue.filter(o => ['pending', 'new', 'sent_to_kitchen'].includes((o.status || '').toLowerCase())).length;
-  const cookingCount = queue.filter(o => ['cooking', 'preparing'].includes((o.status || '').toLowerCase())).length;
 
-  // Format date helper
-  const formatTime = (isoString) => {
+  const pendingCount = queue.filter((o) =>
+    ['pending', 'new', 'sent_to_kitchen'].includes((o.status || '').toLowerCase())
+  ).length;
+  const cookingCount = queue.filter((o) =>
+    ['cooking', 'preparing'].includes((o.status || '').toLowerCase())
+  ).length;
+
+  const formatTime = (rawDate) => {
+    const parsed = parseTimestampToDate(rawDate);
+    if (!parsed) return '--:--';
     try {
-      return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+      return parsed.toLocaleTimeString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
     } catch (e) {
-      return '';
+      return '--:--';
     }
   };
 
-  // Calculate elapsed minutes
-  const getElapsedMins = (isoString) => {
-    try {
-      const diffMs = new Date() - new Date(isoString);
-      return Math.max(0, Math.floor(diffMs / 60000));
-    } catch (e) {
-      return 0;
-    }
+  const getElapsedMins = (rawDate) => {
+    const parsed = parseTimestampToDate(rawDate);
+    if (!parsed) return 0;
+    const diffMs = nowTick - parsed.getTime();
+    if (!Number.isFinite(diffMs) || diffMs <= 0) return 0;
+    return Math.floor(diffMs / 60000);
   };
 
   return (
     <AdminLayout>
       <div className="space-y-8 max-w-[1600px] mx-auto pb-10">
-
-        {/* Floating Toast Notification */}
         {toast && (
-          <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-[1.5rem] shadow-xl text-white font-bold animate-in fade-in slide-in-from-top-4 duration-300
+          <div
+            className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-[1.5rem] shadow-xl text-white font-bold animate-in fade-in slide-in-from-top-4 duration-300
             ${toast.type === 'error' ? 'bg-red-500' : 'bg-slate-900'}
-          `}>
-            {toast.type === 'error' ? <AlertCircle className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
+          `}
+          >
+            {toast.type === 'error' ? (
+              <AlertCircle className="w-5 h-5" />
+            ) : (
+              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+            )}
             <span className="text-xs">{toast.message}</span>
           </div>
         )}
 
-        {/* Premium KDS Dashboard Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white dark:bg-[#0a0a0a] p-8 rounded-[2.5rem] border border-slate-100 dark:border-white/5 shadow-sm">
           <div className="space-y-1">
             <div className="flex items-center gap-3">
@@ -218,25 +302,30 @@ export default function AdminKitchen() {
               </div>
               <h3 className="text-2xl font-black text-slate-900 dark:text-white">Kitchen Queue</h3>
             </div>
-            <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-wider pl-13">Admin Live Preparation Tracking Console</p>
+            <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-wider pl-13">
+              Admin Live Preparation Tracking Console
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-4 pl-13 md:pl-0">
-            {/* Real-time counters */}
             <div className="flex items-center gap-4 bg-slate-50 dark:bg-white/2 p-2 rounded-2xl border border-slate-200/50 dark:border-white/5">
               <div className="px-4 py-1 text-center">
-                <span className="block text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">PENDING</span>
+                <span className="block text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                  PENDING
+                </span>
                 <span className="text-lg font-black text-slate-800 dark:text-white">{pendingCount}</span>
               </div>
               <div className="w-px h-6 bg-slate-200 dark:bg-white/10" />
               <div className="px-4 py-1 text-center">
-                <span className="block text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">COOKING</span>
+                <span className="block text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                  COOKING
+                </span>
                 <span className="text-lg font-black text-orange-500">{cookingCount}</span>
               </div>
             </div>
 
-            {/* Manual refresh button */}
             <button
+              type="button"
               onClick={() => fetchQueue(true)}
               disabled={refreshing || loading}
               className="p-3.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:border-orange-500 dark:hover:border-orange-500 rounded-2xl text-slate-600 dark:text-white/80 hover:text-orange-500 transition-all cursor-pointer"
@@ -246,38 +335,46 @@ export default function AdminKitchen() {
           </div>
         </div>
 
-        {/* Error Alert Box */}
         {error && (
           <div className="p-6 bg-red-500/10 border border-red-500/20 text-red-500 rounded-[2rem] flex items-center gap-4 animate-in fade-in duration-300">
             <AlertCircle className="w-6 h-6 flex-shrink-0 animate-bounce" />
             <div className="text-xs font-bold">{error}</div>
-            <button onClick={() => fetchQueue(true)} className="ml-auto px-4 py-2 bg-red-500 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-red-600 transition-colors">Retry</button>
+            <button
+              type="button"
+              onClick={() => fetchQueue(true)}
+              className="ml-auto px-4 py-2 bg-red-500 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-red-600 transition-colors"
+            >
+              Retry
+            </button>
           </div>
         )}
 
-        {/* Loading Spinner state */}
         {loading ? (
           <div className="h-96 flex flex-col items-center justify-center text-center">
             <RefreshCw className="w-12 h-12 text-orange-500 animate-spin mb-4" />
-            <p className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Retrieving Live Preparation Queue...</p>
+            <p className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+              Retrieving Live Preparation Queue...
+            </p>
           </div>
         ) : queue.length === 0 ? (
-          /* Premium Empty Queue State */
           <div className="h-96 bg-white dark:bg-[#0d0d0d] border border-slate-200 dark:border-white/5 rounded-[3rem] flex flex-col items-center justify-center text-center p-8 shadow-sm">
             <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-500/5 rounded-[2rem] flex items-center justify-center mb-6">
               <CheckCircle2 className="w-10 h-10 text-emerald-500 animate-bounce" />
             </div>
             <h4 className="text-xl font-black text-slate-900 dark:text-white mb-2">Kitchen Queue Clear</h4>
-            <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest max-w-sm leading-relaxed">All active orders have been successfully prepared and dispatched! Watching for new captain tickets...</p>
+            <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest max-w-sm leading-relaxed">
+              All active orders have been successfully prepared and dispatched! Watching for new captain tickets...
+            </p>
           </div>
         ) : (
-          /* Live Preparation Grid */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {queue.map((order) => {
-              const elapsed = getElapsedMins(order.createdAt);
+              const rawTimestamp = getOrderTimestamp(order);
+              const elapsed = getElapsedMins(rawTimestamp);
               const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
               const isExpanded = expandedCard === order.id;
               const isCooking = ['cooking', 'preparing'].includes((order.status || '').toLowerCase());
+              const cleanTable = formatTableLabel(order.tableNo);
 
               return (
                 <div
@@ -286,45 +383,53 @@ export default function AdminKitchen() {
                     ${isCooking ? 'border-orange-500/30 dark:border-orange-500/20' : 'border-slate-200 dark:border-white/5'}
                   `}
                 >
-                  {/* Subtle Orange top bar for Cooking state */}
                   {isCooking && (
                     <div className="absolute top-0 left-0 right-0 h-1.5 bg-orange-500 animate-pulse" />
                   )}
 
                   <div>
-                    {/* Card Header details */}
                     <div className="flex items-start justify-between mb-4">
                       <div>
-                        <h4 className="text-2xl font-black text-slate-900 dark:text-white uppercase">{order.isParcel ? 'PARCEL' : `TABLE ${order.tableNo}`}</h4>
+                        <h4 className="text-2xl font-black text-slate-900 dark:text-white uppercase">
+                          {order.isParcel ? 'PARCEL' : `TABLE ${cleanTable}`}
+                        </h4>
                         <span className="inline-block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">
                           {totalItems} {totalItems === 1 ? 'ITEM' : 'ITEMS'}
                         </span>
                       </div>
 
-                      {/* Timer details */}
-                      <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider
+                      <div
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider
                         ${elapsed >= 15 ? 'bg-red-500/10 text-red-500' : 'bg-slate-50 dark:bg-white/5 text-slate-500 dark:text-white/40'}
-                      `}>
+                      `}
+                      >
                         <Timer className="w-3.5 h-3.5" />
                         <span>{elapsed}m ago</span>
                       </div>
                     </div>
 
-                    {/* Captain & Time Metadata */}
                     <div className="space-y-2 mb-6">
                       <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-white/60">
                         <User className="w-3.5 h-3.5 text-orange-500" />
-                        <span>{order.isParcel ? 'Customer' : 'Captain'}: <strong className="text-slate-900 dark:text-white font-black">{order.captain}</strong></span>
+                        <span>
+                          {order.isParcel ? 'Customer' : 'Captain'}:{' '}
+                          <strong className="text-slate-900 dark:text-white font-black">{order.captain}</strong>
+                        </span>
                       </div>
                       <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-white/60">
                         <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        <span>KOT Time: <strong className="text-slate-800 dark:text-white/80 font-bold">{formatTime(order.createdAt)}</strong></span>
+                        <span>
+                          KOT Time:{' '}
+                          <strong className="text-slate-800 dark:text-white/80 font-bold">
+                            {formatTime(rawTimestamp)}
+                          </strong>
+                        </span>
                       </div>
                     </div>
 
-                    {/* Collapsible Food Items display */}
                     <div className="mb-6">
                       <button
+                        type="button"
                         onClick={() => setExpandedCard(isExpanded ? null : order.id)}
                         className="w-full py-2 bg-slate-50 dark:bg-white/2 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-orange-500 transition-colors flex items-center justify-center gap-2 cursor-pointer border border-slate-100 dark:border-white/5"
                       >
@@ -347,7 +452,9 @@ export default function AdminKitchen() {
                                 {item.quantity}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-xs font-bold text-slate-800 dark:text-white/80 leading-tight truncate">{item.name}</p>
+                                <p className="text-xs font-bold text-slate-800 dark:text-white/80 leading-tight truncate">
+                                  {item.name}
+                                </p>
                                 {item.note && (
                                   <p className="text-[10px] text-amber-600 italic font-bold mt-0.5 leading-none flex items-center gap-1">
                                     <AlertCircle className="w-2.5 h-2.5 flex-shrink-0" /> {item.note}
@@ -361,30 +468,38 @@ export default function AdminKitchen() {
                     </div>
                   </div>
 
-                  {/* Actions & Status Badge Footer */}
                   <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-white/5 mt-auto">
                     <div className="flex items-center justify-between">
-                      <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">KOT Preparation</span>
+                      <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                        KOT Preparation
+                      </span>
                       <div className="flex items-center gap-1.5">
-                        <span className={`w-2 h-2 rounded-full 
+                        <span
+                          className={`w-2 h-2 rounded-full 
                           ${isCooking ? 'bg-orange-500 animate-ping' : 'bg-slate-300 dark:bg-white/20'}
-                        `} />
-                        <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full ${
-                          order.isParcel 
-                            ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20'
-                            : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                        }`}>
-                          {order.tableNo} {order.parcel_id ? `(${order.parcel_id})` : ''}
+                        `}
+                        />
+                        <span
+                          className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full ${
+                            order.isParcel
+                              ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20'
+                              : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                          }`}
+                        >
+                          {cleanTable} {order.parcel_id ? `(${order.parcel_id})` : ''}
                         </span>
-                        <span className={`text-[10px] font-black uppercase tracking-wider
+                        <span
+                          className={`text-[10px] font-black uppercase tracking-wider
                           ${isCooking ? 'text-orange-500' : 'text-slate-400 dark:text-slate-500'}
-                        `}>
+                        `}
+                        >
                           {isCooking ? 'Preparing' : 'Pending'}
                         </span>
                       </div>
                     </div>
 
                     <button
+                      type="button"
                       onClick={() => handleUpdateStatus(order.id, order.status, order.tableNo, order.isParcel)}
                       className={`w-full py-4 rounded-xl flex items-center justify-center gap-2 font-extrabold text-xs uppercase tracking-widest transition-all ${
                         isCooking
@@ -403,13 +518,11 @@ export default function AdminKitchen() {
                       )}
                     </button>
                   </div>
-
                 </div>
               );
             })}
           </div>
         )}
-
       </div>
     </AdminLayout>
   );
