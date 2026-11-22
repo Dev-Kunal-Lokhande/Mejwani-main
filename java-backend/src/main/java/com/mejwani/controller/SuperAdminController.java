@@ -34,26 +34,29 @@ public class SuperAdminController {
     @Value("${upload.dir:uploads}")
     private String uploadDir;
 
-    // In-memory store for platform settings, billing payments, and backup snapshots
-    private final Map<String, Object> platformSettings = new ConcurrentHashMap<>(Map.of(
-        "brandingLogo", "",
-        "platformName", "Mejwani Command Center",
-        "supportEmail", "support@mejwani.com",
-        "supportPhone", "",
-        "smtpSettings", new HashMap<String, Object>(Map.of(
-            "host", "",
-            "port", "587",
-            "user", "",
-            "pass", "",
-            "sender_email", "",
-            "secure", false
-        ))
-    ));
-
+    private final Map<String, Object> platformSettings = initDefaultSettings();
     private final AtomicLong paymentSeq = new AtomicLong(1001);
     private final List> paymentRecords = Collections.synchronizedList(new ArrayList<>());
     private final Map<String, byte[]> backupSnapshots = new ConcurrentHashMap<>();
     private final List> backupMetadataList = Collections.synchronizedList(new ArrayList<>());
+
+    private static Map<String, Object> initDefaultSettings() {
+        Map<String, Object> smtp = new HashMap<>();
+        smtp.put("host", "");
+        smtp.put("port", "587");
+        smtp.put("user", "");
+        smtp.put("pass", "");
+        smtp.put("sender_email", "");
+        smtp.put("secure", false);
+
+        Map<String, Object> settings = new ConcurrentHashMap<>();
+        settings.put("brandingLogo", "");
+        settings.put("platformName", "Mejwani Command Center");
+        settings.put("supportEmail", "support@mejwani.com");
+        settings.put("supportPhone", "");
+        settings.put("smtpSettings", smtp);
+        return settings;
+    }
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> body) {
@@ -71,16 +74,17 @@ public class SuperAdminController {
         }
 
         String token = jwtUtil.generateToken(admin.getEmail(), admin.getRole(), null);
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "token", token,
-            "admin", Map.of(
-                "id", admin.getId(),
-                "name", admin.getName() != null ? admin.getName() : "Super Admin",
-                "email", admin.getEmail(),
-                "role", admin.getRole()
-            )
-        ));
+        Map<String, Object> adminMap = new HashMap<>();
+        adminMap.put("id", admin.getId());
+        adminMap.put("name", admin.getName() != null ? admin.getName() : "Super Admin");
+        adminMap.put("email", admin.getEmail());
+        adminMap.put("role", admin.getRole());
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("success", true);
+        res.put("token", token);
+        res.put("admin", adminMap);
+        return ResponseEntity.ok(res);
     }
 
     private Map<String, Object> serializeHotel(Hotel h) {
@@ -182,18 +186,19 @@ public class SuperAdminController {
             adminCreated = true;
         }
 
-        Map<String, Object> creds = adminCreated
-                ? Map.of("username", adminEmail, "password", rawPassword)
-                : Map.of("username", adminEmail, "password", "(existing account)");
+        Map<String, Object> creds = new HashMap<>();
+        creds.put("username", adminEmail);
+        creds.put("password", adminCreated ? rawPassword : "(existing account)");
 
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "emailSent", false,
-                "data", Map.of(
-                        "hotel", serializeHotel(savedHotel),
-                        "credentials", creds
-                )
-        ));
+        Map<String, Object> data = new HashMap<>();
+        data.put("hotel", serializeHotel(savedHotel));
+        data.put("credentials", creds);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("success", true);
+        res.put("emailSent", false);
+        res.put("data", data);
+        return ResponseEntity.ok(res);
     }
 
     private String saveFile(MultipartFile file, String prefix) {
@@ -332,11 +337,11 @@ public class SuperAdminController {
                 }
             }
         }
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "message", removedEmails.size() + " orphan admin(s) removed",
-            "removed", removedEmails
-        ));
+        Map<String, Object> res = new HashMap<>();
+        res.put("success", true);
+        res.put("message", removedEmails.size() + " orphan admin(s) removed");
+        res.put("removed", removedEmails);
+        return ResponseEntity.ok(res);
     }
 
     @GetMapping("/dashboard")
@@ -384,25 +389,22 @@ public class SuperAdminController {
         system.put("database", "Connected");
         system.put("sockets", "Connected");
 
-        List> insights = List.of(
-            Map.of(
-                "title", "Active Tenant Ratio",
-                "value", totalHotels > 0 ? ((activeHotels * 100) / totalHotels) + "%" : "0%",
-                "detail", activeHotels + " active out of " + totalHotels + " registered hotels"
-            ),
-            Map.of(
-                "title", "Pending Subscription Dues",
-                "value", "₹" + Math.round(pendingRevenue),
-                "detail", "Across generated renewal invoices"
-            )
-        );
+        Map<String, Object> insight1 = new HashMap<>();
+        insight1.put("title", "Active Tenant Ratio");
+        insight1.put("value", totalHotels > 0 ? ((activeHotels * 100) / totalHotels) + "%" : "0%");
+        insight1.put("detail", activeHotels + " active out of " + totalHotels + " registered hotels");
+
+        Map<String, Object> insight2 = new HashMap<>();
+        insight2.put("title", "Pending Subscription Dues");
+        insight2.put("value", "₹" + Math.round(pendingRevenue));
+        insight2.put("detail", "Across generated renewal invoices");
 
         Map<String, Object> payload = new HashMap<>();
         payload.put("metrics", metrics);
         payload.put("system", system);
         payload.put("revenueSeries", List.of());
         payload.put("monthlyGrowth", List.of());
-        payload.put("aiInsights", insights);
+        payload.put("aiInsights", List.of(insight1, insight2));
         payload.put("recentHotels", recentHotels);
 
         return ResponseEntity.ok(Map.of("success", true, "data", payload));
@@ -479,11 +481,11 @@ public class SuperAdminController {
 
         paymentRecords.add(0, record);
 
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "invoiceNumber", invoiceNumber,
-            "data", record
-        ));
+        Map<String, Object> res = new HashMap<>();
+        res.put("success", true);
+        res.put("invoiceNumber", invoiceNumber);
+        res.put("data", record);
+        return ResponseEntity.ok(res);
     }
 
     @GetMapping("/billing/invoice/{invoiceNumber}")
@@ -495,15 +497,12 @@ public class SuperAdminController {
                 }
             }
         }
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "data", Map.of(
-                "invoice_number", invoiceNumber,
-                "hotel_name", "Mejwani Tenant",
-                "plan", "Enterprise",
-                "amount", 0
-            )
-        ));
+        Map<String, Object> fallback = new HashMap<>();
+        fallback.put("invoice_number", invoiceNumber);
+        fallback.put("hotel_name", "Mejwani Tenant");
+        fallback.put("plan", "Enterprise");
+        fallback.put("amount", 0);
+        return ResponseEntity.ok(Map.of("success", true, "data", fallback));
     }
 
     @PatchMapping("/billing/payments/{id}/status")
@@ -587,11 +586,11 @@ public class SuperAdminController {
     public ResponseEntity<?> createBackup() {
         try {
             String id = "backup_" + System.currentTimeMillis() + ".json";
-            Map<String, Object> snapshot = Map.of(
-                "createdAt", Instant.now().toString(),
-                "hotels", hotelRepository.findAll().stream().map(this::serializeHotel).toList(),
-                "admins", adminRepository.findAll().stream().map(this::serializeAdmin).toList()
-            );
+            Map<String, Object> snapshot = new HashMap<>();
+            snapshot.put("createdAt", Instant.now().toString());
+            snapshot.put("hotels", hotelRepository.findAll().stream().map(this::serializeHotel).toList());
+            snapshot.put("admins", adminRepository.findAll().stream().map(this::serializeAdmin).toList());
+
             byte[] bytes = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(snapshot);
             backupSnapshots.put(id, bytes);
 
