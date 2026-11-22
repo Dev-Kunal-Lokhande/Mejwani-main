@@ -1,6 +1,3 @@
-import React, { useState, useEffect } from 'react';
-import { formatMmSs } from '../../utils/diningTimer';
-
 /**
  * DiningTimer — occupiedAt-based MM:SS stopwatch.
  *
@@ -17,6 +14,27 @@ import { formatMmSs } from '../../utils/diningTimer';
  *   - VACANT / null occupiedAt: renders nothing
  *   - Never reads createdAt, updatedAt, kotPrintedAt or any DB order timestamp
  */
+import React, { useState, useEffect } from 'react';
+import { formatMmSs } from '../../utils/diningTimer';
+
+const MAX_SANITY_SECONDS = 24 * 60 * 60; // 24 hours guard against stale DB occupied_at timestamps
+
+function parseOccupiedTimeMs(occupiedAt) {
+  if (!occupiedAt) return NaN;
+  if (occupiedAt instanceof Date) {
+    return occupiedAt.getTime();
+  }
+  const raw = String(occupiedAt).trim();
+  if (!raw) return NaN;
+
+  // If SQL datetime like "2026-11-22 17:00:00" has no timezone marker, treat as local/ISO safely
+  const normalized = /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}/.test(raw)
+    ? raw.replace(' ', 'T')
+    : raw;
+
+  return new Date(normalized).getTime();
+}
+
 export default function DiningTimer({ occupiedAt, isBillPending = false }) {
   const [display, setDisplay] = useState('');
 
@@ -26,7 +44,7 @@ export default function DiningTimer({ occupiedAt, isBillPending = false }) {
       return;
     }
 
-    const startMs = new Date(occupiedAt).getTime();
+    const startMs = parseOccupiedTimeMs(occupiedAt);
     if (isNaN(startMs)) {
       setDisplay('');
       return;
@@ -34,15 +52,31 @@ export default function DiningTimer({ occupiedAt, isBillPending = false }) {
 
     const compute = () => {
       const offset = (typeof window !== 'undefined' ? window.mejwani_server_time_offset : 0) || 0;
-      const totalSeconds = Math.max(0, Math.floor((Date.now() + offset - startMs) / 1000));
-      setDisplay(formatMmSs(totalSeconds));
+      const elapsedSeconds = Math.floor((Date.now() + offset - startMs) / 1000);
+
+      if (!Number.isFinite(elapsedSeconds) || elapsedSeconds < 0) {
+        setDisplay(formatMmSs(0));
+        return;
+      }
+
+      // If occupied_at is from a stale/unreleased historical session (> 24 hrs), show 00:00
+      if (elapsedSeconds > MAX_SANITY_SECONDS) {
+        setDisplay(formatMmSs(0));
+        return;
+      }
+
+      setDisplay(formatMmSs(elapsedSeconds));
     };
 
-    compute(); // Run immediately
+    compute();
+
+    if (isBillPending) {
+      return;
+    }
 
     const id = setInterval(compute, 1000);
     return () => clearInterval(id);
-  }, [occupiedAt]);
+  }, [occupiedAt, isBillPending]);
 
   if (!display) return null;
 
