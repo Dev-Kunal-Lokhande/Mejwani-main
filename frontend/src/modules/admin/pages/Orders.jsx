@@ -63,13 +63,21 @@ const showPrinterErrorToast = (message, toastId, navigate) => {
 };
 
 const getOrderTableId = (order) =>
-  order?.table_id ?? order?.tableId ?? order?.table?.id ?? null;
+  order?.table_id ?? order?.tableId ?? order?.table?.id ?? order?.table?.table_id ?? null;
 
 const isActiveOrder = (order) => {
   if (!order) return false;
-  const st = String(order.status || '').toUpperCase();
-  return st !== 'COMPLETED' && st !== 'CANCELLED';
+  const st = String(order.status || '').toUpperCase().trim();
+  return !['COMPLETED', 'PAID', 'SETTLED', 'CANCELLED', 'CLOSED'].includes(st);
 };
+
+const normalizeTableLabel = (val) =>
+  String(val || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^table\s*/i, '')
+    .replace(/^t(?=\d)/i, '')
+    .trim();
 
 export default function OrdersPage() {
   const navigate = useNavigate();
@@ -104,14 +112,40 @@ export default function OrdersPage() {
   const findActiveOrderForTable = useCallback(
     (table) => {
       if (!table) return null;
+      const tId = table.id ?? table.table_id ?? null;
+      const tLabels = new Set(
+        [
+          table.table_name,
+          table.tableName,
+          table.table_number,
+          table.tableNumber,
+          table.number,
+          normalizeTableLabel(table.table_name),
+          normalizeTableLabel(table.table_number || table.number)
+        ]
+          .map((v) => String(v || '').trim().toLowerCase())
+          .filter(Boolean)
+      );
+
       return (
         orders.find((o) => {
           if (!isActiveOrder(o)) return false;
           const oTableId = getOrderTableId(o);
-          if (oTableId != null && String(oTableId) === String(table.id)) return true;
-          const oTableName = String(o.table_name || o.tableName || '').trim().toLowerCase();
-          const tName = String(table.table_name || table.tableName || '').trim().toLowerCase();
-          return Boolean(oTableName && tName && oTableName === tName);
+          if (tId != null && oTableId != null && String(oTableId) === String(tId)) return true;
+
+          const oLabels = [
+            o.table_name,
+            o.tableName,
+            o.table_number,
+            o.tableNumber,
+            o.table?.table_name,
+            o.table?.number,
+            normalizeTableLabel(o.table_name || o.table_number)
+          ]
+            .map((v) => String(v || '').trim().toLowerCase())
+            .filter(Boolean);
+
+          return oLabels.some((lbl) => tLabels.has(lbl));
         }) || null
       );
     },
@@ -122,7 +156,7 @@ export default function OrdersPage() {
     (table) => {
       if (!table) return false;
       const st = String(table.status || '').toLowerCase().trim();
-      if (st === 'occupied' || st === 'busy' || st === 'bill_pending' || st === 'running') {
+      if (['occupied', 'busy', 'bill_pending', 'running', 'active'].includes(st)) {
         return true;
       }
       return Boolean(findActiveOrderForTable(table));
@@ -145,22 +179,27 @@ export default function OrdersPage() {
         null;
 
       if (embeddedOrder && isActiveOrder(embeddedOrder)) {
+        const amount = Number(
+          embeddedOrder.grand_total ??
+            embeddedOrder.total ??
+            embeddedOrder.subtotal ??
+            table.current_amount ??
+            table.order_total ??
+            0
+        );
         return {
           ...embeddedOrder,
           id: embeddedOrder.id ?? embeddedOrder.order_id ?? embeddedOrder._id ?? `TBL-${table.id}`,
           table_id: getOrderTableId(embeddedOrder) ?? table.id,
           table_name: embeddedOrder.table_name || table.table_name,
-          items: Array.isArray(embeddedOrder.items) ? embeddedOrder.items : []
+          items: Array.isArray(embeddedOrder.items) ? embeddedOrder.items : [],
+          subtotal: Number(embeddedOrder.subtotal) > 0 ? Number(embeddedOrder.subtotal) : amount,
+          grand_total: Number(embeddedOrder.grand_total) > 0 ? Number(embeddedOrder.grand_total) : amount
         };
       }
 
       const statusLower = String(table.status || '').toLowerCase().trim();
-      if (
-        statusLower === 'occupied' ||
-        statusLower === 'busy' ||
-        statusLower === 'bill_pending' ||
-        statusLower === 'running'
-      ) {
+      if (['occupied', 'busy', 'bill_pending', 'running', 'active'].includes(statusLower)) {
         const amount = Number(
           table.current_amount ??
             table.order_total ??
@@ -1295,10 +1334,17 @@ export default function OrdersPage() {
           const matchesId = targetTableId != null && String(t.id) === String(targetTableId);
           const matchesName =
             targetOrder?.table_name &&
-            String(t.table_name || '').trim().toLowerCase() ===
-              String(targetOrder.table_name || '').trim().toLowerCase();
+            normalizeTableLabel(t.table_name) === normalizeTableLabel(targetOrder.table_name);
           if (matchesId || matchesName) {
-            return { ...t, status: 'available', occupied_at: null };
+            return {
+              ...t,
+              status: 'available',
+              occupied_at: null,
+              currentOrder: null,
+              current_order: null,
+              current_amount: 0,
+              order_total: 0
+            };
           }
           return t;
         })
@@ -1321,6 +1367,10 @@ export default function OrdersPage() {
             headers: { 'Content-Type': 'application/json' }
           }).catch(() => {});
         }
+        if (socket && hotelId) {
+          socket.emit('table-released', { hotelId, tableId: targetTableId });
+          socket.emit('table-updated', { hotelId, tableId: targetTableId, status: 'available' });
+        }
         toast.success('✅ Table settled & marked AVAILABLE.');
         await fetchOrders();
         await fetchTables();
@@ -1335,6 +1385,16 @@ export default function OrdersPage() {
       });
       const data = await res.json();
       if (data.success) {
+        if (targetTableId != null) {
+          await authorizedFetch(`${API_BASE}/tables/${targetTableId}/release?hotelId=${hotelId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          }).catch(() => {});
+        }
+        if (socket && hotelId) {
+          socket.emit('table-released', { hotelId, tableId: targetTableId, orderId });
+          socket.emit('table-updated', { hotelId, tableId: targetTableId, status: 'available' });
+        }
         toast.success('✅ Bill settled & table is now AVAILABLE.');
         await fetchOrders();
         await fetchTables();
@@ -1660,7 +1720,7 @@ export default function OrdersPage() {
     }
     const rawTableStatus = String(table.status || '').toLowerCase();
     if (rawTableStatus === 'bill_pending') return 'bill_pending';
-    if (rawTableStatus === 'occupied' || rawTableStatus === 'busy' || rawTableStatus === 'running') {
+    if (['occupied', 'busy', 'running', 'active'].includes(rawTableStatus)) {
       return 'occupied';
     }
 
