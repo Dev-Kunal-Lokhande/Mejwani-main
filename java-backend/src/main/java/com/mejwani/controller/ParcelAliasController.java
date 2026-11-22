@@ -8,15 +8,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.util.*;
 
 /**
- * Alias controller - maps /api/parcels/* -> parcel-orders logic
+ * Alias controller - maps /api/parcels/* → parcel-orders logic
  */
 @RestController
 @RequestMapping("/api/parcels")
@@ -39,7 +34,7 @@ public class ParcelAliasController {
         m.put("created_at", order.getCreatedAt());
         m.put("hotel_id", order.getHotel() != null ? order.getHotel().getId() : null);
 
-        List> items = new ArrayList<>();
+        List<Map<String, Object>> items = new ArrayList<>();
         if (order.getItems() != null) {
             for (ParcelOrderItem poi : order.getItems()) {
                 Map<String, Object> item = new HashMap<>();
@@ -55,69 +50,17 @@ public class ParcelAliasController {
         return m;
     }
 
-    private boolean matchesDate(Object createdAtObj, String dateStr) {
-        if (dateStr == null || dateStr.isBlank() || createdAtObj == null) {
-            return true;
-        }
-        try {
-            LocalDate targetDate = LocalDate.parse(dateStr.trim());
-            ZoneId zone = ZoneId.systemDefault();
-
-            if (createdAtObj instanceof LocalDateTime ldt) {
-                return ldt.toLocalDate().equals(targetDate);
-            }
-            if (createdAtObj instanceof OffsetDateTime odt) {
-                return odt.atZoneSameInstant(zone).toLocalDate().equals(targetDate);
-            }
-            if (createdAtObj instanceof Instant instant) {
-                return instant.atZone(zone).toLocalDate().equals(targetDate);
-            }
-            if (createdAtObj instanceof java.sql.Timestamp ts) {
-                return ts.toInstant().atZone(zone).toLocalDate().equals(targetDate);
-            }
-            if (createdAtObj instanceof Date d) {
-                return d.toInstant().atZone(zone).toLocalDate().equals(targetDate);
-            }
-            String raw = createdAtObj.toString().trim();
-            if (raw.length() >= 10) {
-                return LocalDate.parse(raw.substring(0, 10)).equals(targetDate);
-            }
-        } catch (Exception ignored) {
-            // Invalid date filter shouldn't break listing
-        }
-        return true;
-    }
-
-    private BigDecimal parseBigDecimalOrZero(Object val) {
-        if (val == null || val.toString().isBlank()) {
-            return BigDecimal.ZERO;
-        }
-        try {
-            return new BigDecimal(val.toString().trim());
-        } catch (NumberFormatException e) {
-            return BigDecimal.ZERO;
-        }
-    }
-
     @Transactional(readOnly = true)
     @GetMapping
     public ResponseEntity<?> getParcels(
             @RequestParam(required = false) Long hotelId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String date) {
-        if (hotelId == null) {
-            return ResponseEntity.ok(List.of());
-        }
-        List<ParcelOrder> orders = (status != null && !status.isBlank())
-                ? parcelOrderRepository.findByHotelIdAndStatus(hotelId, status.trim())
+        if (hotelId == null) return ResponseEntity.ok(List.of());
+        List<ParcelOrder> orders = status != null
+                ? parcelOrderRepository.findByHotelIdAndStatus(hotelId, status)
                 : parcelOrderRepository.findByHotelIdOrderByCreatedAtDesc(hotelId);
-
-        List> result = orders.stream()
-                .filter(o -> matchesDate(o.getCreatedAt(), date))
-                .map(this::serializeParcel)
-                .toList();
-
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(orders.stream().map(this::serializeParcel).toList());
     }
 
     @Transactional(readOnly = true)
@@ -131,113 +74,55 @@ public class ParcelAliasController {
     @Transactional
     @PostMapping
     public ResponseEntity<?> createParcel(@RequestBody Map<String, Object> body) {
-        if (body == null || body.get("hotelId") == null || body.get("hotelId").toString().isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "hotelId is required"));
-        }
-
-        final Long hotelId;
-        try {
-            hotelId = Long.valueOf(body.get("hotelId").toString().trim());
-        } catch (NumberFormatException e) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Invalid hotelId"));
-        }
-
-        Hotel hotel = hotelRepository.findById(hotelId)
-                .orElseThrow(() -> new RuntimeException("Hotel not found"));
-
-        String customerName = (body.get("customerName") != null && !body.get("customerName").toString().isBlank())
-                ? body.get("customerName").toString().trim()
-                : "Walk-in";
-        String customerPhone = (body.get("customerPhone") != null && !body.get("customerPhone").toString().isBlank())
-                ? body.get("customerPhone").toString().trim()
-                : null;
-        String paymentMode = (body.get("paymentMode") != null && !body.get("paymentMode").toString().isBlank())
-                ? body.get("paymentMode").toString().trim()
-                : "CASH";
+        Long hotelId = Long.valueOf(body.get("hotelId").toString());
+        Hotel hotel = hotelRepository.findById(hotelId).orElseThrow(() -> new RuntimeException("Hotel not found"));
 
         ParcelOrder order = ParcelOrder.builder()
                 .hotel(hotel)
-                .customerName(customerName)
-                .customerPhone(customerPhone)
+                .customerName(body.containsKey("customerName") ? body.get("customerName").toString() : "Walk-in")
+                .customerPhone(body.containsKey("customerPhone") ? body.get("customerPhone").toString() : null)
                 .status("NEW")
-                .paymentMode(paymentMode)
+                .paymentMode(body.containsKey("paymentMode") ? body.get("paymentMode").toString() : "CASH")
                 .build();
 
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> itemsData = (List<Map<String, Object>>) body.get("items");
         List<ParcelOrderItem> items = new ArrayList<>();
         BigDecimal total = BigDecimal.ZERO;
 
-        Object rawItems = body.get("items");
-        if (rawItems instanceof List<?> rawList) {
-            for (Object entry : rawList) {
-                if (!(entry instanceof Map<?, ?> rawMap)) continue;
-
-                @SuppressWarnings("unchecked")
-                Map<String, Object> itemData = (Map<String, Object>) rawMap;
-
+        if (itemsData != null) {
+            for (Map<String, Object> itemData : itemsData) {
                 ParcelOrderItem poi = new ParcelOrderItem();
                 poi.setParcelOrder(order);
-
-                int qty = 1;
-                if (itemData.get("quantity") != null && !itemData.get("quantity").toString().isBlank()) {
-                    try {
-                        qty = Integer.parseInt(itemData.get("quantity").toString().trim());
-                    } catch (NumberFormatException ignored) {
-                        qty = 1;
-                    }
+                poi.setQuantity(Integer.valueOf(itemData.get("quantity").toString()));
+                if (itemData.containsKey("menuItemId") && itemData.get("menuItemId") != null) {
+                    Long menuItemId = Long.valueOf(itemData.get("menuItemId").toString());
+                    menuItemRepository.findById(menuItemId).ifPresent(mi -> {
+                        poi.setMenuItem(mi);
+                        poi.setItemName(mi.getName());
+                        poi.setUnitPrice(mi.getPrice());
+                    });
+                } else if (itemData.containsKey("itemName")) {
+                    poi.setItemName(itemData.get("itemName").toString());
+                    poi.setUnitPrice(itemData.containsKey("unitPrice")
+                        ? new BigDecimal(itemData.get("unitPrice").toString()) : BigDecimal.ZERO);
                 }
-                poi.setQuantity(Math.max(1, qty));
-
-                Object rawMenuItemId = itemData.get("menuItemId");
-                BigDecimal fallbackUnitPrice = parseBigDecimalOrZero(itemData.get("unitPrice"));
-                String fallbackItemName = (itemData.get("itemName") != null && !itemData.get("itemName").toString().isBlank())
-                        ? itemData.get("itemName").toString().trim()
-                        : "Item";
-
-                if (rawMenuItemId != null && !rawMenuItemId.toString().isBlank()) {
-                    try {
-                        Long menuItemId = Long.valueOf(rawMenuItemId.toString().trim());
-                        menuItemRepository.findById(menuItemId).ifPresentOrElse(
-                                mi -> {
-                                    poi.setMenuItem(mi);
-                                    poi.setItemName(mi.getName() != null ? mi.getName() : fallbackItemName);
-                                    poi.setUnitPrice(mi.getPrice() != null ? mi.getPrice() : fallbackUnitPrice);
-                                },
-                                () -> {
-                                    poi.setItemName(fallbackItemName);
-                                    poi.setUnitPrice(fallbackUnitPrice);
-                                }
-                        );
-                    } catch (NumberFormatException e) {
-                        poi.setItemName(fallbackItemName);
-                        poi.setUnitPrice(fallbackUnitPrice);
-                    }
-                } else {
-                    poi.setItemName(fallbackItemName);
-                    poi.setUnitPrice(fallbackUnitPrice);
-                }
-
-                BigDecimal unitPrice = poi.getUnitPrice() != null ? poi.getUnitPrice() : BigDecimal.ZERO;
-                poi.setUnitPrice(unitPrice);
-                total = total.add(unitPrice.multiply(BigDecimal.valueOf(poi.getQuantity())));
+                if (poi.getUnitPrice() == null) poi.setUnitPrice(BigDecimal.ZERO);
+                total = total.add(poi.getUnitPrice().multiply(BigDecimal.valueOf(poi.getQuantity())));
                 items.add(poi);
             }
         }
 
         order.setItems(items);
         order.setTotalAmount(total);
-
         return ResponseEntity.ok(serializeParcel(parcelOrderRepository.save(order)));
     }
 
     @Transactional
     @PutMapping("/{id}/status")
     public ResponseEntity<?> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        String newStatus = body != null ? body.get("status") : null;
-        if (newStatus == null || newStatus.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "status is required"));
-        }
         return parcelOrderRepository.findById(id).map(order -> {
-            order.setStatus(newStatus.trim());
+            order.setStatus(body.get("status"));
             return ResponseEntity.ok(serializeParcel(parcelOrderRepository.save(order)));
         }).orElse(ResponseEntity.notFound().build());
     }

@@ -74,7 +74,8 @@
 //   setInterval(syncClock, 120000);
 // }
 
-// export { BACKEND_BASE, API_BASE, authorizedFetch };const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+// export { BACKEND_BASE, API_BASE, authorizedFetch };
+const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
 const normalizeBase = (value) => (value || '').trim().replace(/\/+$/, '').replace(/\/api$/, '');
 
 const getPreferredBackendBase = () => {
@@ -95,7 +96,7 @@ const authorizedFetch = async (url, options = {}) => {
   }
   const startTime = Date.now();
   const res = await fetch(url, { ...options, headers });
-
+  
   const serverDateStr = res.headers.get('Date');
   if (serverDateStr && typeof window !== 'undefined') {
     const serverTime = new Date(serverDateStr).getTime();
@@ -104,7 +105,7 @@ const authorizedFetch = async (url, options = {}) => {
       window.mejwani_server_time_offset = (serverTime + rtt / 2) - Date.now();
     }
   }
-
+  
   return res;
 };
 
@@ -114,7 +115,7 @@ if (typeof window !== 'undefined') {
   const syncClock = async () => {
     try {
       const start = Date.now();
-      const res = await authorizedFetch(`${API_BASE}/today/sales?limit=1&t=${Date.now()}`);
+      const res = await fetch(`${API_BASE}/today/sales?limit=1&t=${Date.now()}`);
       const serverDateStr = res.headers.get('Date');
       if (serverDateStr) {
         const serverTime = new Date(serverDateStr).getTime();
@@ -133,4 +134,4 @@ if (typeof window !== 'undefined') {
   setInterval(syncClock, 120000);
 }
 
-export { BACKEND_BASE, API_BASE, authorizedFetch, hostname, normalizeBase };
+export { BACKEND_BASE, API_BASE, authorizedFetch };

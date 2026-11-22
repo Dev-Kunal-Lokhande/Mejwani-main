@@ -31,7 +31,7 @@ public class ParcelOrderController {
         m.put("created_at", order.getCreatedAt());
         m.put("hotel_id", order.getHotel() != null ? order.getHotel().getId() : null);
 
-        List> items = new ArrayList<>();
+        List<Map<String, Object>> items = new ArrayList<>();
         if (order.getItems() != null) {
             for (ParcelOrderItem poi : order.getItems()) {
                 Map<String, Object> item = new HashMap<>();
@@ -51,8 +51,8 @@ public class ParcelOrderController {
     @GetMapping
     public ResponseEntity<?> getParcelOrders(@RequestParam Long hotelId,
                                               @RequestParam(required = false) String status) {
-        List<ParcelOrder> orders = (status != null && !status.isBlank())
-                ? parcelOrderRepository.findByHotelIdAndStatus(hotelId, status.trim())
+        List<ParcelOrder> orders = status != null
+                ? parcelOrderRepository.findByHotelIdAndStatus(hotelId, status)
                 : parcelOrderRepository.findByHotelIdOrderByCreatedAtDesc(hotelId);
         return ResponseEntity.ok(orders.stream().map(this::serializeParcelOrder).toList());
     }
@@ -68,70 +68,41 @@ public class ParcelOrderController {
     @Transactional
     @PostMapping
     public ResponseEntity<?> createParcelOrder(@RequestBody Map<String, Object> body) {
-        if (body == null || body.get("hotelId") == null || body.get("hotelId").toString().isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "hotelId is required"));
-        }
-
-        Long hotelId = Long.valueOf(body.get("hotelId").toString().trim());
+        Long hotelId = Long.valueOf(body.get("hotelId").toString());
         Hotel hotel = hotelRepository.findById(hotelId).orElseThrow(() -> new RuntimeException("Hotel not found"));
 
         ParcelOrder order = ParcelOrder.builder()
                 .hotel(hotel)
-                .customerName(body.get("customerName") != null && !body.get("customerName").toString().isBlank()
-                        ? body.get("customerName").toString().trim()
-                        : "Walk-in")
-                .customerPhone(body.get("customerPhone") != null ? body.get("customerPhone").toString().trim() : null)
+                .customerName(body.containsKey("customerName") ? body.get("customerName").toString() : "Walk-in")
+                .customerPhone(body.containsKey("customerPhone") ? body.get("customerPhone").toString() : null)
                 .status("NEW")
-                .paymentMode(body.get("paymentMode") != null && !body.get("paymentMode").toString().isBlank()
-                        ? body.get("paymentMode").toString().trim()
-                        : "CASH")
+                .paymentMode(body.containsKey("paymentMode") ? body.get("paymentMode").toString() : "CASH")
                 .build();
 
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> itemsData = (List<Map<String, Object>>) body.get("items");
         List<ParcelOrderItem> items = new ArrayList<>();
         BigDecimal total = BigDecimal.ZERO;
 
-        Object rawItems = body.get("items");
-        if (rawItems instanceof List<?>) {
-            @SuppressWarnings("unchecked")
-            List> itemsData = (List>) rawItems;
-
+        if (itemsData != null) {
             for (Map<String, Object> itemData : itemsData) {
-                if (itemData == null) continue;
-
                 ParcelOrderItem poi = new ParcelOrderItem();
                 poi.setParcelOrder(order);
+                poi.setQuantity(Integer.valueOf(itemData.get("quantity").toString()));
 
-                int qty = itemData.get("quantity") != null && !itemData.get("quantity").toString().isBlank()
-                        ? Integer.parseInt(itemData.get("quantity").toString().trim())
-                        : 1;
-                poi.setQuantity(Math.max(1, qty));
-
-                Object rawMenuItemId = itemData.get("menuItemId");
-                if (rawMenuItemId != null && !rawMenuItemId.toString().isBlank()) {
-                    Long menuItemId = Long.valueOf(rawMenuItemId.toString().trim());
-                    menuItemRepository.findById(menuItemId).ifPresentOrElse(
-                            mi -> {
-                                poi.setMenuItem(mi);
-                                poi.setItemName(mi.getName());
-                                poi.setUnitPrice(mi.getPrice() != null ? mi.getPrice() : BigDecimal.ZERO);
-                            },
-                            () -> {
-                                poi.setItemName(Objects.toString(itemData.get("itemName"), "Item"));
-                                BigDecimal fallbackPrice = itemData.get("unitPrice") != null && !itemData.get("unitPrice").toString().isBlank()
-                                        ? new BigDecimal(itemData.get("unitPrice").toString().trim())
-                                        : BigDecimal.ZERO;
-                                poi.setUnitPrice(fallbackPrice);
-                            }
-                    );
+                if (itemData.containsKey("menuItemId")) {
+                    Long menuItemId = Long.valueOf(itemData.get("menuItemId").toString());
+                    menuItemRepository.findById(menuItemId).ifPresent(mi -> {
+                        poi.setMenuItem(mi);
+                        poi.setItemName(mi.getName());
+                        poi.setUnitPrice(mi.getPrice());
+                    });
                 } else {
-                    poi.setItemName(Objects.toString(itemData.get("itemName"), "Item"));
-                    BigDecimal unitPrice = itemData.get("unitPrice") != null && !itemData.get("unitPrice").toString().isBlank()
-                            ? new BigDecimal(itemData.get("unitPrice").toString().trim())
-                            : BigDecimal.ZERO;
-                    poi.setUnitPrice(unitPrice);
+                    poi.setItemName(itemData.get("itemName").toString());
+                    poi.setUnitPrice(new BigDecimal(itemData.get("unitPrice").toString()));
                 }
 
-                if (poi.getUnitPrice() != null && poi.getQuantity() != null) {
+                if (poi.getUnitPrice() != null) {
                     total = total.add(poi.getUnitPrice().multiply(BigDecimal.valueOf(poi.getQuantity())));
                 }
                 items.add(poi);
@@ -147,12 +118,8 @@ public class ParcelOrderController {
     @Transactional
     @PutMapping("/{id}/status")
     public ResponseEntity<?> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        String newStatus = body != null ? body.get("status") : null;
-        if (newStatus == null || newStatus.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "status is required"));
-        }
         return parcelOrderRepository.findById(id).map(order -> {
-            order.setStatus(newStatus.trim());
+            order.setStatus(body.get("status"));
             return ResponseEntity.ok(serializeParcelOrder(parcelOrderRepository.save(order)));
         }).orElse(ResponseEntity.notFound().build());
     }

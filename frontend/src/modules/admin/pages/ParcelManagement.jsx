@@ -120,29 +120,23 @@ export default function ParcelManagement() {
   // Filter only PARCEL tables and active orders
   const parcelTables = useMemo(() => {
     return tables
-      .filter((t) => t.section_name?.toUpperCase() === 'PARCEL')
+      .filter(t => t.section_name?.toUpperCase() === 'PARCEL')
       .sort((a, b) => {
         const orderA = a.display_order !== undefined ? Number(a.display_order) : 0;
         const orderB = b.display_order !== undefined ? Number(b.display_order) : 0;
         if (orderA !== orderB) return orderA - orderB;
-        return String(a.table_number || '').localeCompare(String(b.table_number || ''), undefined, {
-          numeric: true
-        });
+        return a.table_number.localeCompare(b.table_number, undefined, { numeric: true });
       });
   }, [tables]);
 
   const selectedTableLive = useMemo(() => {
     if (!selectedTable) return null;
-    return tables.find((t) => t.id === selectedTable.id) || null;
+    return tables.find(t => t.id === selectedTable.id) || null;
   }, [tables, selectedTable]);
 
   const activeOrderForSelectedTable = useMemo(() => {
     if (!selectedTableLive) return null;
-    return (
-      orders.find(
-        (o) => o.table_id === selectedTableLive.id && o.status !== 'COMPLETED' && o.status !== 'CANCELLED'
-      ) || null
-    );
+    return orders.find(o => o.table_id === selectedTableLive.id && o.status !== 'COMPLETED' && o.status !== 'CANCELLED') || null;
   }, [orders, selectedTableLive]);
 
   const [checkoutOrder, setCheckoutOrder] = useState(null);
@@ -159,7 +153,7 @@ export default function ParcelManagement() {
       setCheckoutOrder(activeOrderForSelectedTable);
     } else {
       if (checkoutOrder && checkoutOrder.table_id === selectedTableLive.id) {
-        const latestVersion = orders.find((o) => o.id === checkoutOrder.id);
+        const latestVersion = orders.find(o => o.id === checkoutOrder.id);
         if (latestVersion) {
           setCheckoutOrder(latestVersion);
           return;
@@ -167,7 +161,7 @@ export default function ParcelManagement() {
       }
       setCheckoutOrder(null);
     }
-  }, [selectedTableLive, orders, activeOrderForSelectedTable, checkoutOrder]);
+  }, [selectedTableLive, orders, activeOrderForSelectedTable]);
 
   const fetchTables = useCallback(async () => {
     if (isFetchingTablesRef.current) return;
@@ -176,10 +170,7 @@ export default function ParcelManagement() {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
       const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
       const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
-      const tablesRes = await authorizedFetch(`${API_BASE}/tables${hotelParam}`);
-      if (!tablesRes.ok) {
-        throw new Error(`HTTP ${tablesRes.status}`);
-      }
+      const tablesRes = await fetch(`${API_BASE}/tables${hotelParam}`);
       const tablesData = await tablesRes.json();
       if (tablesData.success) {
         setTables(tablesData.data || []);
@@ -198,13 +189,10 @@ export default function ParcelManagement() {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
       const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
       const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
-      const ordersRes = await authorizedFetch(`${API_BASE}/orders${hotelParam}`);
-      if (!ordersRes.ok) {
-        throw new Error(`HTTP ${ordersRes.status}`);
-      }
+      const ordersRes = await fetch(`${API_BASE}/orders${hotelParam}`);
       const ordersData = await ordersRes.json();
       if (ordersData.success) {
-        const parcelOrders = (ordersData.data || []).filter((o) => o.order_type === 'PARCEL');
+        const parcelOrders = (ordersData.data || []).filter(o => o.order_type === 'PARCEL');
         setOrders(parcelOrders);
       }
     } catch (err) {
@@ -258,14 +246,13 @@ export default function ParcelManagement() {
       try {
         const token = localStorage.getItem('mejwani_admin_jwt');
         const resp = await fetch(`${API_BASE}/print-agent/status`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
+          headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await resp.json();
         if (resp.ok && data && data.success && data.agent) {
-          const config =
-            typeof data.agent.printer_config === 'string'
-              ? JSON.parse(data.agent.printer_config)
-              : data.agent.printer_config;
+          const config = typeof data.agent.printer_config === 'string'
+            ? JSON.parse(data.agent.printer_config)
+            : data.agent.printer_config;
           const resolvedConfig = config || {};
           setPrinterConfig(resolvedConfig);
           localStorage.setItem(`mejwani_printer_config_${hotelId}`, JSON.stringify(resolvedConfig));
@@ -305,18 +292,9 @@ export default function ParcelManagement() {
 
     const onTableUpdated = () => fetchTables();
     const onOrderUpdated = () => fetchOrders();
-    const onTableReleased = () => {
-      fetchTables();
-      fetchOrders();
-    };
-    const onBillCompleted = () => {
-      fetchTables();
-      fetchOrders();
-    };
-    const onNewOrder = () => {
-      fetchOrders();
-      playAlertChime();
-    };
+    const onTableReleased = () => { fetchTables(); fetchOrders(); };
+    const onBillCompleted = () => { fetchTables(); fetchOrders(); };
+    const onNewOrder = () => { fetchOrders(); playAlertChime(); };
 
     socket.on('table-updated', onTableUpdated);
     socket.on('order-updated', onOrderUpdated);
@@ -395,7 +373,7 @@ export default function ParcelManagement() {
   };
 
   const menuCategories = useMemo(() => {
-    const unique = new Set(menuItems.map((item) => item.category || 'Uncategorized'));
+    const unique = new Set(menuItems.map(item => item.category || 'Uncategorized'));
     return ['All', ...Array.from(unique)];
   }, [menuItems]);
 
@@ -441,7 +419,7 @@ export default function ParcelManagement() {
   }, [menuItems]);
 
   const filteredMenuItems = useMemo(() => {
-    return expandedMenuItems.filter((item) => {
+    return expandedMenuItems.filter(item => {
       const matchesSearch = [item.name, item.marathiName, item.code, item.shortcode, item.category]
         .filter(Boolean)
         .join(' ')
@@ -474,18 +452,16 @@ export default function ParcelManagement() {
 
   const openAddMoreItems = () => {
     if (activeOrderForSelectedTable && activeOrderForSelectedTable.items) {
-      setAdditionalItems(
-        activeOrderForSelectedTable.items.map((item) => ({
-          cartId: `${item.menu_item_id}_${item.portion_type || 'FULL'}`,
-          menuItemId: item.menu_item_id,
-          portionType: item.portion_type || 'FULL',
-          name: item.name,
-          marathiName: item.marathiName || '',
-          quantity: item.quantity,
-          price: parseFloat(item.price),
-          note: item.note || ''
-        }))
-      );
+      setAdditionalItems(activeOrderForSelectedTable.items.map(item => ({
+        cartId: `${item.menu_item_id}_${item.portion_type || 'FULL'}`,
+        menuItemId: item.menu_item_id,
+        portionType: item.portion_type || 'FULL',
+        name: item.name,
+        marathiName: item.marathiName || '',
+        quantity: item.quantity,
+        price: parseFloat(item.price),
+        note: item.note || ''
+      })));
     } else {
       setAdditionalItems([]);
     }
@@ -512,7 +488,7 @@ export default function ParcelManagement() {
     prevSelectedTableIdRef.current = selectedTable.id;
 
     const hasActiveOrder = orders.some(
-      (o) => o.table_id === selectedTable.id && o.status !== 'COMPLETED' && o.status !== 'CANCELLED'
+      o => o.table_id === selectedTable.id && o.status !== 'COMPLETED' && o.status !== 'CANCELLED'
     );
     if (!hasActiveOrder) {
       openDirectOrder();
@@ -533,10 +509,8 @@ export default function ParcelManagement() {
   const handleAddAdditionalItem = (menuItem, portion = null) => {
     const isHalfFull = menuItem.pricing_type === 'HALF_FULL';
     const portionType = isHalfFull
-      ? portion === 'HALF'
-        ? 'HALF'
-        : 'FULL'
-      : menuItem.portion_type || menuItem.portionType || 'FULL';
+      ? (portion === 'HALF' ? 'HALF' : 'FULL')
+      : (menuItem.portion_type || menuItem.portionType || 'FULL');
     const baseId = menuItem.originalId || menuItem._id || menuItem.id;
     const cartId = `${baseId}_${portionType}`;
 
@@ -547,23 +521,20 @@ export default function ParcelManagement() {
       displayName = menuItem.name + (portionType === 'HALF' ? ' (Half)' : ' (Full)');
     }
 
-    setAdditionalItems((prev) => {
-      const existing = prev.find((i) => i.cartId === cartId);
+    setAdditionalItems(prev => {
+      const existing = prev.find(i => i.cartId === cartId);
       if (existing) {
-        return prev.map((i) => (i.cartId === cartId ? { ...i, quantity: i.quantity + 1 } : i));
+        return prev.map(i => i.cartId === cartId ? { ...i, quantity: i.quantity + 1 } : i);
       }
-      return [
-        ...prev,
-        {
-          cartId,
-          menuItemId: baseId,
-          portionType,
-          name: displayName,
-          marathiName: menuItem.marathiName || '',
-          quantity: 1,
-          price: resolvedPrice
-        }
-      ];
+      return [...prev, {
+        cartId,
+        menuItemId: baseId,
+        portionType,
+        name: displayName,
+        marathiName: menuItem.marathiName || '',
+        quantity: 1,
+        price: resolvedPrice
+      }];
     });
 
     setTimeout(() => {
@@ -574,14 +545,10 @@ export default function ParcelManagement() {
   const handleMenuSearchKeyDown = (e) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setMenuSearchHighlightedIndex((prev) =>
-        filteredMenuItems.length > 0 ? (prev + 1) % filteredMenuItems.length : 0
-      );
+      setMenuSearchHighlightedIndex((prev) => (filteredMenuItems.length > 0 ? (prev + 1) % filteredMenuItems.length : 0));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setMenuSearchHighlightedIndex((prev) =>
-        filteredMenuItems.length > 0 ? (prev - 1 + filteredMenuItems.length) % filteredMenuItems.length : 0
-      );
+      setMenuSearchHighlightedIndex((prev) => (filteredMenuItems.length > 0 ? (prev - 1 + filteredMenuItems.length) % filteredMenuItems.length : 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (filteredMenuItems.length > 0) {
@@ -598,17 +565,15 @@ export default function ParcelManagement() {
   };
 
   const handleAdditionalQuantity = (cartId, delta) => {
-    setAdditionalItems((prev) =>
-      prev
-        .map((i) => (i.cartId === cartId ? { ...i, quantity: i.quantity + delta } : i))
-        .filter((i) => i.quantity > 0)
+    setAdditionalItems(prev =>
+      prev.map(i => i.cartId === cartId ? { ...i, quantity: i.quantity + delta } : i)
+        .filter(i => i.quantity > 0)
     );
   };
 
-  const additionalSubtotal = useMemo(
-    () => additionalItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
-    [additionalItems]
-  );
+  const additionalSubtotal = useMemo(() =>
+    additionalItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    [additionalItems]);
 
   const openBrowserPrintKOT = (kotData) => {
     const printWindow = window.open('', '_blank', 'width=380,height=550');
@@ -691,9 +656,7 @@ export default function ParcelManagement() {
 
   const handleSendToKot = async ({ printKot = true } = {}) => {
     if (additionalItems.length === 0) {
-      toast.error('Add at least one item to send to KOT.', {
-        style: { borderRadius: '10px', background: '#333', color: '#fff' }
-      });
+      toast.error('Add at least one item to send to KOT.', { style: { borderRadius: '10px', background: '#333', color: '#fff' } });
       return null;
     }
     if (!selectedTable) return null;
@@ -708,7 +671,7 @@ export default function ParcelManagement() {
         tableId: selectedTable.id,
         printKot: !!printKot,
         saveOnly: !printKot,
-        items: additionalItems.map((item) => ({
+        items: additionalItems.map(item => ({
           menu_item_id: item.menuItemId,
           portion_type: item.portionType || 'FULL',
           name: item.name,
@@ -730,7 +693,7 @@ export default function ParcelManagement() {
             table_name: selectedTable.table_name || selectedTable.table_number,
             section_name: 'PARCEL',
             items: createdOrder.items || payload.items
-          }).catch((err) => console.error('[Background Print] Failed:', err));
+          }).catch(err => console.error('[Background Print] Failed:', err));
         }
 
         setIsCreatingDirectOrder(false);
@@ -767,11 +730,9 @@ export default function ParcelManagement() {
     const itemsToSubmit = [];
     const originalItems = activeOrderForSelectedTable.items || [];
 
-    originalItems.forEach((orig) => {
+    originalItems.forEach(orig => {
       const origPortion = orig.portion_type || 'FULL';
-      const cartItem = additionalItems.find(
-        (i) => i.menuItemId === orig.menu_item_id && i.portionType === origPortion
-      );
+      const cartItem = additionalItems.find(i => i.menuItemId === orig.menu_item_id && i.portionType === origPortion);
       if (cartItem) {
         const delta = cartItem.quantity - orig.quantity;
         const noteChanged = (cartItem.note || '') !== (orig.note || '');
@@ -799,11 +760,8 @@ export default function ParcelManagement() {
       }
     });
 
-    additionalItems.forEach((cartItem) => {
-      const isNew = !originalItems.some(
-        (orig) =>
-          orig.menu_item_id === cartItem.menuItemId && (orig.portion_type || 'FULL') === cartItem.portionType
-      );
+    additionalItems.forEach(cartItem => {
+      const isNew = !originalItems.some(orig => orig.menu_item_id === cartItem.menuItemId && (orig.portion_type || 'FULL') === cartItem.portionType);
       if (isNew) {
         itemsToSubmit.push({
           menu_item_id: cartItem.menuItemId,
@@ -818,9 +776,7 @@ export default function ParcelManagement() {
     });
 
     if (itemsToSubmit.length === 0) {
-      toast.error('No changes made to the bill.', {
-        style: { borderRadius: '10px', background: '#333', color: '#fff' }
-      });
+      toast.error('No changes made to the bill.', { style: { borderRadius: '10px', background: '#333', color: '#fff' } });
       return activeOrderForSelectedTable;
     }
 
@@ -836,14 +792,17 @@ export default function ParcelManagement() {
       };
 
       const orderId = activeOrderForSelectedTable.id;
-      const res = await axios.put(`${API_BASE}/orders/${orderId}/append-items${hotelParam}`, payload);
+      const res = await axios.put(
+        `${API_BASE}/orders/${orderId}/append-items${hotelParam}`,
+        payload
+      );
 
       if (res.data.success) {
         const updatedOrderData = res.data.data;
         toast.success('✅ Parcel order updated!');
         const deltaItems = itemsToSubmit
-          .filter((item) => item.quantity > 0)
-          .map((item) => ({
+          .filter(item => item.quantity > 0)
+          .map(item => ({
             name: item.name,
             marathiName: item.marathiName,
             quantity: item.quantity,
@@ -893,11 +852,14 @@ export default function ParcelManagement() {
         setAdditionalItems([]);
       }
 
-      const res = await authorizedFetch(`${API_BASE}/orders/pay/${orderId}?hotelId=${hotelId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentMode: selectedPaymentMode || 'CASH' })
-      });
+      const res = await authorizedFetch(
+        `${API_BASE}/orders/pay/${orderId}?hotelId=${hotelId}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentMode: selectedPaymentMode || 'CASH' })
+        }
+      );
       const data = await res.json();
       if (data.success) {
         fetchTables();
@@ -954,13 +916,13 @@ export default function ParcelManagement() {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
       const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
 
-      const res = await authorizedFetch(`${API_BASE}/bills/${orderId}/cancel?hotelId=${hotelId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
+      const res = await authorizedFetch(
+        `${API_BASE}/bills/${orderId}/cancel?hotelId=${hotelId}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+      );
       const data = await res.json();
       if (data.success) {
-        toast.success('Parcel order cancelled');
+        toast.success("Parcel order cancelled");
         setSelectedTable(null);
         setIsAddingItems(false);
         setIsCreatingDirectOrder(false);
@@ -989,10 +951,9 @@ export default function ParcelManagement() {
       return;
     }
 
-    const isDuplicate = tables.some(
-      (t) =>
-        t.section_name?.toUpperCase() === 'PARCEL' &&
-        t.table_number.toUpperCase() === formTableNumber.trim().toUpperCase()
+    const isDuplicate = tables.some(t =>
+      t.section_name?.toUpperCase() === 'PARCEL' &&
+      t.table_number.toUpperCase() === formTableNumber.trim().toUpperCase()
     );
     if (isDuplicate) {
       toast.error('A parcel table with this code already exists.');
@@ -1048,11 +1009,10 @@ export default function ParcelManagement() {
       return;
     }
 
-    const isDuplicate = tables.some(
-      (t) =>
-        t.section_name?.toUpperCase() === 'PARCEL' &&
-        t.table_number.toUpperCase() === formTableNumber.trim().toUpperCase() &&
-        t.id !== editingTable.id
+    const isDuplicate = tables.some(t =>
+      t.section_name?.toUpperCase() === 'PARCEL' &&
+      t.table_number.toUpperCase() === formTableNumber.trim().toUpperCase() &&
+      t.id !== editingTable.id
     );
     if (isDuplicate) {
       toast.error('A parcel table with this code already exists.');
@@ -1141,19 +1101,19 @@ export default function ParcelManagement() {
       sgst,
       grandTotal,
       serviceCharge = 0,
-      cgstRate: bCgstRate,
-      sgstRate: bSgstRate,
-      serviceChargeRate: bServiceChargeRate,
+      cgstRate,
+      sgstRate,
+      serviceChargeRate,
       phone
     } = billData;
 
     const printCurrency = 'Rs. ';
     let itemsHtml = '';
     if (items) {
-      items.forEach((item) => {
+      items.forEach(item => {
         itemsHtml += `
           <tr>
-            <td style="width: 55%; text-align: left; font-weight: bold; font-size: 11px; padding: 4px 0 2px 0; word-wrap: break-word; vertical-align: top;">${String(item.name || '').toUpperCase()}</td>
+            <td style="width: 55%; text-align: left; font-weight: bold; font-size: 11px; padding: 4px 0 2px 0; word-wrap: break-word; vertical-align: top;">${item.name.toUpperCase()}</td>
             <td style="width: 15%; text-align: right; font-weight: bold; font-size: 11px; padding: 4px 0 2px 0; vertical-align: top; padding-right: 5px;">${item.quantity}</td>
             <td style="width: 30%; text-align: right; font-weight: bold; font-size: 11px; padding: 4px 0 2px 0; vertical-align: top;">${printCurrency}${parseFloat(item.price * item.quantity).toFixed(0)}</td>
           </tr>
@@ -1189,9 +1149,9 @@ export default function ParcelManagement() {
   <div class="receipt">
     <div class="center">
       <div class="title">${hotelName}</div>
-      ${address ? `<div class="subtitle">${address}</div>` : ''}
-      ${phone ? `<div class="subtitle">Phone: ${phone}</div>` : ''}
-      ${gstNumber ? `<div class="subtitle">GSTIN: ${gstNumber}</div>` : ''}
+      ${address ? `<div class="subtitle">${address}</div>` : ""}
+      ${phone ? `<div class="subtitle">Phone: ${phone}</div>` : ""}
+      ${gstNumber ? `<div class="subtitle">GSTIN: ${gstNumber}</div>` : ""}
     </div>
     <div class="divider"></div>
     <table style="width: 100%; font-size: 10px; font-weight: bold; margin-bottom: 2px; border-collapse: collapse;">
@@ -1219,36 +1179,24 @@ export default function ParcelManagement() {
         <td style="text-align: left; padding: 2px 0;">Subtotal</td>
         <td style="text-align: right; padding: 2px 0;">${printCurrency}${parseFloat(subtotal).toFixed(2)}</td>
       </tr>
-      ${
-        bCgstRate > 0
-          ? `
+      ${cgstRate > 0 ? `
       <tr>
-        <td style="text-align: left; padding: 2px 0; font-size: 10px;">CGST (${bCgstRate}%)</td>
+        <td style="text-align: left; padding: 2px 0; font-size: 10px;">CGST (${cgstRate}%)</td>
         <td style="text-align: right; padding: 2px 0; font-size: 10px;">${printCurrency}${parseFloat(cgst).toFixed(2)}</td>
       </tr>
-      `
-          : ''
-      }
-      ${
-        bSgstRate > 0
-          ? `
+      ` : ""}
+      ${sgstRate > 0 ? `
       <tr>
-        <td style="text-align: left; padding: 2px 0; font-size: 10px;">SGST (${bSgstRate}%)</td>
+        <td style="text-align: left; padding: 2px 0; font-size: 10px;">SGST (${sgstRate}%)</td>
         <td style="text-align: right; padding: 2px 0; font-size: 10px;">${printCurrency}${parseFloat(sgst).toFixed(2)}</td>
       </tr>
-      `
-          : ''
-      }
-      ${
-        Number(serviceCharge) > 0
-          ? `
+      ` : ""}
+      ${Number(serviceCharge) > 0 ? `
       <tr>
-        <td style="text-align: left; padding: 2px 0; font-size: 10px;">Service Charge (${bServiceChargeRate}%)</td>
+        <td style="text-align: left; padding: 2px 0; font-size: 10px;">Service Charge (${serviceChargeRate}%)</td>
         <td style="text-align: right; padding: 2px 0; font-size: 10px;">${printCurrency}${parseFloat(serviceCharge).toFixed(2)}</td>
       </tr>
-      `
-          : ''
-      }
+      ` : ""}
     </table>
     <div class="double-divider"></div>
     <table style="width: 100%; font-size: 14px; font-weight: 900; border-collapse: collapse;">
@@ -1303,7 +1251,7 @@ export default function ParcelManagement() {
       phone: systemSettings.branding.phone,
       gstNumber: systemSettings.billing.gstNumber,
       tableNumber: `${table.table_code || table.table_name} (${table.section_name})`,
-      cashierName: 'Counter',
+      cashierName: "Counter",
       captainName: order.captain_name || 'ADMIN',
       orderId: `ORD-${order.id}`,
       dateTime: `${dateStr} ${timeStr}`,
@@ -1348,13 +1296,12 @@ export default function ParcelManagement() {
         window.mejwani_start_ack_timeout(jobId, 'BILL');
       }
 
-      const isLocalHost =
-        window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.startsWith('192.168.') ||
-        window.location.hostname.startsWith('10.') ||
-        window.location.hostname.startsWith('172.') ||
-        window.location.hostname.endsWith('.local');
+      const isLocalHost = window.location.hostname === 'localhost' ||
+                          window.location.hostname === '127.0.0.1' ||
+                          window.location.hostname.startsWith('192.168.') ||
+                          window.location.hostname.startsWith('10.') ||
+                          window.location.hostname.startsWith('172.') ||
+                          window.location.hostname.endsWith('.local');
       if (isLocalHost) {
         try {
           const controller = new AbortController();
@@ -1368,7 +1315,7 @@ export default function ParcelManagement() {
           const localData = await localResponse.json();
           clearTimeout(timeoutId);
           if (localData.success) {
-            if (!suppressToast) onPrintJobAcknowledgedLocal(jobId, tableName, 'BILL');
+            onPrintJobAcknowledgedLocal(jobId, tableName, 'BILL');
             return;
           }
         } catch (localErr) {
@@ -1378,9 +1325,10 @@ export default function ParcelManagement() {
       }
 
       if (isLocalHost) {
-        fetch('http://127.0.0.1:9111/trigger-poll').catch(() => {});
+        fetch('http://127.0.0.1:9111/trigger-poll').catch(() => { });
       }
-      if (!suppressToast) onPrintJobAcknowledgedLocal(jobId, tableName, 'BILL');
+      onPrintJobAcknowledgedLocal(jobId, tableName, 'BILL');
+
     } catch (err) {
       console.error('Direct print error, opening browser print fallback:', err);
       handleThermalPrint(billData);
@@ -1397,7 +1345,7 @@ export default function ParcelManagement() {
       captainName: order.captain_name || 'ADMIN',
       orderId: order.kot_number || order.id,
       dateTime: order.created_at ? formatDateTimeDDMMYYYY(order.created_at) : formatDateTimeDDMMYYYY(new Date()),
-      items: (order.items || []).map((item) => ({
+      items: (order.items || []).map(item => ({
         name: item.name || item.itemName,
         quantity: item.quantity || item.qty || 1,
         note: item.note
@@ -1457,7 +1405,7 @@ export default function ParcelManagement() {
       }
 
       if (!localPrintSuccess && isLocalHost) {
-        fetch('http://127.0.0.1:9111/trigger-poll').catch(() => {});
+        fetch('http://127.0.0.1:9111/trigger-poll').catch(() => { });
       }
     } catch (err) {
       console.error('[KOT Print] Falling back to browser KOT print:', err);
@@ -1468,6 +1416,7 @@ export default function ParcelManagement() {
   return (
     <AdminLayout>
       <div className="-mt-6 space-y-6 w-full max-w-full overflow-visible">
+        
         {/* HEADER SECTION */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-white/5">
           <div>
@@ -1481,7 +1430,6 @@ export default function ParcelManagement() {
           </div>
           <div className="flex flex-wrap gap-3">
             <button
-              type="button"
               onClick={() => setIsManageTablesOpen(true)}
               className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-white rounded-xl font-bold text-xs uppercase tracking-wide transition-all hover:bg-slate-200 dark:hover:bg-white/10 cursor-pointer"
             >
@@ -1489,7 +1437,6 @@ export default function ParcelManagement() {
               Manage Parcel Tables
             </button>
             <button
-              type="button"
               onClick={() => {
                 setEditingTable(null);
                 setFormTableNumber('');
@@ -1509,36 +1456,26 @@ export default function ParcelManagement() {
         {/* LOADING & EMPTY STATES */}
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 animate-pulse">
-            {[1, 2, 3, 4, 5, 6].map((n) => (
-              <div
-                key={n}
-                className="h-32 bg-slate-100 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5"
-              />
+            {[1, 2, 3, 4, 5, 6].map(n => (
+              <div key={n} className="h-32 bg-slate-100 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5" />
             ))}
           </div>
         ) : parcelTables.length === 0 ? (
           <div className="border border-dashed border-slate-200 dark:border-white/10 rounded-3xl p-16 text-center max-w-md mx-auto space-y-4">
             <Package className="w-12 h-12 mx-auto text-[#ff6b00]/40" />
-            <h4 className="text-sm font-black uppercase tracking-widest text-slate-800 dark:text-white">
-              No parcel tables found
-            </h4>
-            <p className="text-[11px] font-bold text-slate-400 dark:text-white/20">
-              Click "+ Add Parcel Table" to populate your parcel tables board.
-            </p>
+            <h4 className="text-sm font-black uppercase tracking-widest text-slate-800 dark:text-white">No parcel tables found</h4>
+            <p className="text-[11px] font-bold text-slate-400 dark:text-white/20">Click "+ Add Parcel Table" to populate your parcel tables board.</p>
           </div>
         ) : (
           /* RESPONSIVE PARCEL TABLES GRID */
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 animate-in fade-in duration-300">
             {parcelTables.map((table) => {
-              const order = orders.find(
-                (o) => o.table_id === table.id && o.status !== 'COMPLETED' && o.status !== 'CANCELLED'
-              );
+              const order = orders.find(o => o.table_id === table.id && o.status !== 'COMPLETED' && o.status !== 'CANCELLED');
               const isOccupied = table.status === 'occupied' || table.status === 'bill_pending' || !!order;
 
               return (
                 <button
                   key={table.id}
-                  type="button"
                   disabled={!table.is_active}
                   onClick={() => setSelectedTable(table)}
                   className={`p-4 rounded-2xl border transition-all duration-300 flex flex-col justify-between items-center text-center min-h-[110px] cursor-pointer ${
@@ -1552,12 +1489,17 @@ export default function ParcelManagement() {
                   {/* Top part: Elapsed Time */}
                   <div className="text-[10px] font-black uppercase tracking-wider h-4">
                     {isOccupied && (
-                      <DiningTimer occupiedAt={table.occupied_at} isBillPending={table.status === 'bill_pending'} />
+                      <DiningTimer
+                        occupiedAt={table.occupied_at}
+                        isBillPending={table.status === 'bill_pending'}
+                      />
                     )}
                   </div>
 
                   {/* Middle part: Table Name */}
-                  <div className="text-2xl font-black tracking-tight my-1">{table.table_name}</div>
+                  <div className="text-2xl font-black tracking-tight my-1">
+                    {table.table_name}
+                  </div>
 
                   {/* Bottom part: Amount & Save Icon */}
                   <div className="w-full flex items-center justify-between h-5 text-xs font-black">
@@ -1578,30 +1520,18 @@ export default function ParcelManagement() {
           </div>
         )}
 
-        {/* NEW BILL / ORDER SELECTOR MODAL */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {/* NEW BILL / ORDER SELECTOR MODAL (Vacant/Add More Flow) */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
         {selectedTableLive && (isCreatingDirectOrder || isAddingItems) && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-            <div
-              className="absolute inset-0"
-              onClick={() => {
-                setSelectedTable(null);
-                closeAddMoreItems();
-                closeDirectOrder();
-              }}
-            />
+            <div className="absolute inset-0" onClick={() => { setSelectedTable(null); closeAddMoreItems(); closeDirectOrder(); }} />
             <div className="relative flex flex-col bg-white dark:bg-[#0d0d0d] border-2 border-slate-100 dark:border-white/5 rounded-3xl shadow-2xl z-10 w-[95vw] h-[90vh] overflow-hidden">
+              
               {/* Modal Header */}
               <div className="p-4 border-b border-slate-100 dark:border-white/5 flex items-center gap-3 bg-slate-50/50 dark:bg-white/2">
                 <button
-                  type="button"
-                  onClick={
-                    isCreatingDirectOrder
-                      ? () => {
-                          closeDirectOrder();
-                          setSelectedTable(null);
-                        }
-                      : closeAddMoreItems
-                  }
+                  onClick={isCreatingDirectOrder ? () => { closeDirectOrder(); setSelectedTable(null); } : closeAddMoreItems}
                   className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl text-slate-400 hover:text-slate-600 transition-all flex-shrink-0"
                 >
                   <ChevronLeft className="w-5 h-5" />
@@ -1614,22 +1544,12 @@ export default function ParcelManagement() {
                   <p className="text-[9px] font-black text-slate-400 dark:text-white/30 uppercase tracking-widest mt-0.5">
                     {isCreatingDirectOrder
                       ? `${selectedTableLive.table_name} · Vacant Session`
-                      : `KOT-${activeOrderForSelectedTable?.kot_number || activeOrderForSelectedTable?.id} · ${selectedTableLive.table_name}`}
+                      : `KOT-${activeOrderForSelectedTable?.kot_number || activeOrderForSelectedTable?.id} · ${selectedTableLive.table_name}`
+                    }
                   </p>
                 </div>
                 <button
-                  type="button"
-                  onClick={
-                    isCreatingDirectOrder
-                      ? () => {
-                          closeDirectOrder();
-                          setSelectedTable(null);
-                        }
-                      : () => {
-                          setSelectedTable(null);
-                          closeAddMoreItems();
-                        }
-                  }
+                  onClick={isCreatingDirectOrder ? () => { closeDirectOrder(); setSelectedTable(null); } : () => { setSelectedTable(null); closeAddMoreItems(); }}
                   className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl text-slate-400 hover:text-slate-600 transition-all"
                 >
                   <X className="w-5 h-5" />
@@ -1640,6 +1560,8 @@ export default function ParcelManagement() {
               <div className="flex-1 flex flex-col lg:flex-row overflow-hidden" style={{ minHeight: 0 }}>
                 {/* Left side: Menu items and searches */}
                 <div className="flex-1 flex flex-col overflow-hidden border-r border-slate-100 dark:border-white/5">
+                  
+                  {/* Search and Filters */}
                   <div className="p-4 space-y-2 border-b border-slate-100 dark:border-white/5 flex-shrink-0">
                     <div className="flex gap-2">
                       <div className="relative flex-1">
@@ -1647,7 +1569,7 @@ export default function ParcelManagement() {
                         <input
                           ref={menuSearchInputRef}
                           value={menuSearchTerm}
-                          onChange={(e) => setMenuSearchTerm(e.target.value)}
+                          onChange={e => setMenuSearchTerm(e.target.value)}
                           onKeyDown={handleMenuSearchKeyDown}
                           placeholder="Search item name or shortcode..."
                           className="w-full rounded-xl border-2 py-2 pl-9 pr-3 text-xs font-bold outline-none transition-all border-slate-200 dark:border-white/5 bg-white dark:bg-[#0d0d0d] text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-[#ff6b00] focus:ring-2 focus:ring-orange-500/10"
@@ -1655,14 +1577,14 @@ export default function ParcelManagement() {
                       </div>
                       <select
                         value={menuTypeFilter}
-                        onChange={(e) => setMenuTypeFilter(e.target.value)}
+                        onChange={e => setMenuTypeFilter(e.target.value)}
                         className="rounded-xl border-2 py-2 px-3 text-xs font-bold outline-none transition-all border-slate-200 dark:border-white/5 bg-white dark:bg-[#0d0d0d] text-slate-900 dark:text-white focus:border-[#ff6b00]"
                       >
                         <option value="All">All Types</option>
                         <option value="VEG">VEG</option>
                         <option value="NON_VEG">NON-VEG</option>
                       </select>
-
+                      
                       <div className="flex bg-slate-100 dark:bg-white/5 p-1 rounded-xl border border-slate-200 dark:border-white/10">
                         <button
                           type="button"
@@ -1688,11 +1610,11 @@ export default function ParcelManagement() {
                         </button>
                       </div>
                     </div>
-
+                    
+                    {/* Categories selector */}
                     <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
-                      {menuCategories.map((cat) => (
+                      {menuCategories.map(cat => (
                         <button
-                          type="button"
                           key={cat}
                           onClick={() => setMenuCategoryFilter(cat)}
                           className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${
@@ -1707,6 +1629,7 @@ export default function ParcelManagement() {
                     </div>
                   </div>
 
+                  {/* Menu Items Grid */}
                   <div className="flex-1 overflow-y-auto p-4 min-h-0 flex flex-col">
                     {menuItems.length === 0 ? (
                       <div className="p-6 text-center text-slate-400 font-bold text-xs">Loading menu...</div>
@@ -1729,20 +1652,14 @@ export default function ParcelManagement() {
                                 const baseId = item.originalId || item._id || item.id;
                                 const portionType = item.portion_type || item.portionType || 'FULL';
                                 const targetCartId = `${baseId}_${portionType}`;
-                                const qtySingle = additionalItems
-                                  .filter((c) => c.cartId === targetCartId)
-                                  .reduce((sum, c) => sum + c.quantity, 0);
+                                const qtySingle = additionalItems.filter(c => c.cartId === targetCartId).reduce((sum, c) => sum + c.quantity, 0);
 
                                 return (
                                   <tr
                                     key={item._id || item.id}
                                     style={!item.isAvailable ? { filter: 'grayscale(60%)', opacity: 0.6 } : undefined}
                                     onClick={(e) => {
-                                      if (
-                                        e.target.closest('button') ||
-                                        e.target.closest('input') ||
-                                        e.target.closest('select')
-                                      ) {
+                                      if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) {
                                         return;
                                       }
                                       if (item.isAvailable) {
@@ -1750,18 +1667,12 @@ export default function ParcelManagement() {
                                       }
                                     }}
                                     className={`hover:bg-slate-50/50 dark:hover:bg-white/[0.01] cursor-pointer transition-all ${
-                                      idx === menuSearchHighlightedIndex
-                                        ? 'bg-orange-500/15 dark:bg-orange-500/30 text-orange-600 dark:text-orange-400 font-extrabold shadow-sm'
-                                        : ''
+                                      idx === menuSearchHighlightedIndex ? 'bg-orange-500/15 dark:bg-orange-500/30 text-orange-600 dark:text-orange-400 font-extrabold shadow-sm' : ''
                                     }`}
                                   >
                                     <td className="p-3">
                                       <div className="flex items-center gap-2">
-                                        <span
-                                          className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                                            item.type === 'VEG' ? 'bg-emerald-500' : 'bg-rose-500'
-                                          }`}
-                                        />
+                                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${item.type === 'VEG' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                                         <div>
                                           <span className="font-extrabold text-slate-800 dark:text-white">{item.name}</span>
                                           {(item.shortcode || item.code) && (
@@ -1772,17 +1683,13 @@ export default function ParcelManagement() {
                                         </div>
                                       </div>
                                     </td>
-                                    <td className="p-3 text-[10px] text-slate-400 uppercase tracking-wider">
-                                      {item.category || 'ITEM'}
-                                    </td>
+                                    <td className="p-3 text-[10px] text-slate-400 uppercase tracking-wider">{item.category || 'ITEM'}</td>
                                     <td className="p-3 text-right font-black text-slate-800 dark:text-white">
                                       {formatCurrency(item.price)}
                                     </td>
                                     <td className="p-3 text-right">
                                       {!item.isAvailable ? (
-                                        <span className="text-[10px] uppercase font-bold text-rose-500 bg-rose-500/10 px-2 py-1 rounded-lg">
-                                          Unavailable
-                                        </span>
+                                        <span className="text-[10px] uppercase font-bold text-rose-500 bg-rose-500/10 px-2 py-1 rounded-lg">Unavailable</span>
                                       ) : qtySingle > 0 ? (
                                         <div className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-white/5 p-1 rounded-lg border border-slate-200 dark:border-white/10 select-none">
                                           <button
@@ -1795,9 +1702,7 @@ export default function ParcelManagement() {
                                           >
                                             <Minus className="w-3 h-3" />
                                           </button>
-                                          <span className="px-2 text-xs font-black text-slate-800 dark:text-white min-w-[16px] text-center">
-                                            {qtySingle}
-                                          </span>
+                                          <span className="px-2 text-xs font-black text-slate-800 dark:text-white min-w-[16px] text-center">{qtySingle}</span>
                                           <button
                                             type="button"
                                             onClick={(e) => {
@@ -1836,9 +1741,7 @@ export default function ParcelManagement() {
                           const baseId = item.originalId || item._id || item.id;
                           const portionType = item.portion_type || item.portionType || 'FULL';
                           const targetCartId = `${baseId}_${portionType}`;
-                          const qtyInCart = additionalItems
-                            .filter((c) => c.cartId === targetCartId)
-                            .reduce((sum, c) => sum + c.quantity, 0);
+                          const qtyInCart = additionalItems.filter(c => c.cartId === targetCartId).reduce((sum, c) => sum + c.quantity, 0);
                           const isAlreadyAdded = qtyInCart > 0;
                           return (
                             <div
@@ -1852,11 +1755,11 @@ export default function ParcelManagement() {
                               className={`relative p-3 rounded-xl border text-left bg-white dark:bg-[#0a0a0a] transition-all group ${
                                 idx === menuSearchHighlightedIndex
                                   ? 'ring-2 ring-orange-500 border-orange-500 shadow-md scale-[1.01]'
-                                  : !item.isAvailable
-                                  ? 'opacity-50 cursor-not-allowed'
-                                  : isAlreadyAdded
-                                  ? 'border-orange-500 shadow-sm hover:shadow-md'
-                                  : 'border-slate-200 dark:border-white/10 hover:border-orange-400 hover:shadow-md'
+                                  : (!item.isAvailable
+                                    ? 'opacity-50 cursor-not-allowed'
+                                    : isAlreadyAdded
+                                    ? 'border-orange-500 shadow-sm hover:shadow-md'
+                                    : 'border-slate-200 dark:border-white/10 hover:border-orange-400 hover:shadow-md')
                               } ${item.isAvailable ? 'cursor-pointer active:scale-[0.98]' : ''}`}
                             >
                               {isAlreadyAdded && (
@@ -1864,18 +1767,8 @@ export default function ParcelManagement() {
                                   Qty: {qtyInCart}
                                 </span>
                               )}
-                              <span
-                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[8px] font-black uppercase mb-1.5 ${
-                                  item.type === 'VEG'
-                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
-                                    : 'bg-rose-500/10 border-rose-500/20 text-rose-500'
-                                }`}
-                              >
-                                <span
-                                  className={`w-1 h-1 rounded-full ${
-                                    item.type === 'VEG' ? 'bg-emerald-500' : 'bg-rose-500'
-                                  }`}
-                                />
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[8px] font-black uppercase mb-1.5 ${item.type === 'VEG' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' : 'bg-rose-500/10 border-rose-500/20 text-rose-500'}`}>
+                                <span className={`w-1 h-1 rounded-full ${item.type === 'VEG' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                                 {item.type === 'VEG' ? 'VEG' : 'NON-VEG'}
                               </span>
                               <p className="text-xs font-black text-slate-800 dark:text-white leading-tight group-hover:text-[#ff6b00] transition-colors flex items-center gap-2">
@@ -1886,9 +1779,7 @@ export default function ParcelManagement() {
                                   </span>
                                 )}
                               </p>
-                              <p className="text-[9px] text-slate-400 dark:text-white/30 font-bold uppercase tracking-wider mt-0.5 truncate">
-                                {item.category || 'ITEM'}
-                              </p>
+                              <p className="text-[9px] text-slate-400 dark:text-white/30 font-bold uppercase tracking-wider mt-0.5 truncate">{item.category || 'ITEM'}</p>
 
                               <button
                                 type="button"
@@ -1918,12 +1809,9 @@ export default function ParcelManagement() {
                 {/* Right side: Selected Items Cart */}
                 <div className="w-full lg:w-96 flex flex-col flex-shrink-0 border-t lg:border-t-0 border-slate-100 dark:border-white/5 bg-slate-50/20 dark:bg-black/10">
                   <div className="p-4 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
-                    <span className="text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-widest">
-                      Selected Items
-                    </span>
+                    <span className="text-[10px] font-black text-slate-400 dark:text-white/30 uppercase tracking-widest">Selected Items</span>
                     {additionalItems.length > 0 && (
                       <button
-                        type="button"
                         onClick={() => setAdditionalItems([])}
                         className="text-[9px] font-bold text-rose-500 hover:underline flex items-center gap-1"
                       >
@@ -1949,45 +1837,37 @@ export default function ParcelManagement() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-50 dark:divide-white/5">
-                            {additionalItems.map((item) => (
+                            {additionalItems.map(item => (
                               <tr key={item.cartId}>
                                 <td className="py-2.5">
-                                  <span className="font-extrabold text-slate-800 dark:text-white block leading-tight">
-                                    {item.name}
-                                  </span>
-                                  <span className="text-[9px] text-slate-400 font-bold block mt-0.5">
-                                    {formatCurrency(item.price)}
-                                  </span>
+                                  <span className="font-extrabold text-slate-800 dark:text-white block leading-tight">{item.name}</span>
+                                  <span className="text-[9px] text-slate-400 font-bold block mt-0.5">{formatCurrency(item.price)}</span>
                                   <div className="mt-1.5 space-y-1 max-w-[200px]">
                                     <div className="flex gap-1 flex-wrap">
-                                      {['Roti', 'Chapati', 'Bhakari'].map((opt) => (
+                                      {['Roti', 'Chapati', 'Bhakari'].map(opt => (
                                         <button
                                           key={opt}
                                           type="button"
                                           onClick={() => {
-                                            setAdditionalItems((prev) =>
-                                              prev.map((i) => {
-                                                if (i.cartId === item.cartId) {
-                                                  const current = i.note || '';
-                                                  const prefix = current ? `${current}, ` : '';
-                                                  return { ...i, note: `${prefix}${opt}` };
-                                                }
-                                                return i;
-                                              })
-                                            );
+                                            setAdditionalItems(prev => prev.map(i => {
+                                              if (i.cartId === item.cartId) {
+                                                const current = i.note || '';
+                                                const prefix = current ? `${current}, ` : '';
+                                                return { ...i, note: `${prefix}${opt}` };
+                                              }
+                                              return i;
+                                            }));
                                           }}
                                           className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-[8px] text-slate-500 dark:text-white/60 rounded-md font-extrabold cursor-pointer border border-slate-200/50 dark:border-white/5 transition-all"
                                         >
                                           +{opt}
                                         </button>
                                       ))}
-                                      {item.note && (
+                                      {(item.note) && (
                                         <button
                                           type="button"
                                           onClick={() => {
-                                            setAdditionalItems((prev) =>
-                                              prev.map((i) => (i.cartId === item.cartId ? { ...i, note: '' } : i))
-                                            );
+                                            setAdditionalItems(prev => prev.map(i => i.cartId === item.cartId ? { ...i, note: '' } : i));
                                           }}
                                           className="px-1.5 py-0.5 bg-red-50 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 text-[8px] text-red-500 rounded-md font-extrabold cursor-pointer transition-all"
                                         >
@@ -2000,9 +1880,7 @@ export default function ParcelManagement() {
                                       value={item.note || ''}
                                       onChange={(e) => {
                                         const val = e.target.value;
-                                        setAdditionalItems((prev) =>
-                                          prev.map((i) => (i.cartId === item.cartId ? { ...i, note: val } : i))
-                                        );
+                                        setAdditionalItems(prev => prev.map(i => i.cartId === item.cartId ? { ...i, note: val } : i));
                                       }}
                                       placeholder="Add prep note (e.g. 2 Roti, 2 Bhakari)..."
                                       className="w-full px-2 py-1 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[9px] text-slate-800 dark:text-white placeholder-slate-400/60 font-bold focus:outline-none focus:border-[#ff6b00] transition-all"
@@ -2011,21 +1889,11 @@ export default function ParcelManagement() {
                                 </td>
                                 <td className="py-2.5 text-center">
                                   <div className="inline-flex items-center gap-1 bg-slate-50 dark:bg-white/5 p-0.5 rounded-lg border border-slate-200 dark:border-white/5">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAdditionalQuantity(item.cartId, -1)}
-                                      className="p-0.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer"
-                                    >
+                                    <button onClick={() => handleAdditionalQuantity(item.cartId, -1)} className="p-0.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer">
                                       <Minus className="w-3 h-3" />
                                     </button>
-                                    <span className="text-[10px] font-black w-4 text-center text-slate-900 dark:text-white">
-                                      {item.quantity}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAdditionalQuantity(item.cartId, 1)}
-                                      className="p-0.5 rounded text-[#ff6b00] hover:bg-orange-500/10 cursor-pointer"
-                                    >
+                                    <span className="text-[10px] font-black w-4 text-center text-slate-900 dark:text-white">{item.quantity}</span>
+                                    <button onClick={() => handleAdditionalQuantity(item.cartId, 1)} className="p-0.5 rounded text-[#ff6b00] hover:bg-orange-500/10 cursor-pointer">
                                       <Plus className="w-3 h-3" />
                                     </button>
                                   </div>
@@ -2041,6 +1909,7 @@ export default function ParcelManagement() {
                     )}
                   </div>
 
+                  {/* Cart Footer Checkout Actions */}
                   {additionalItems.length > 0 && (
                     <div className="p-4 border-t border-slate-100 dark:border-white/5 space-y-3 bg-white dark:bg-[#0d0d0d]">
                       <div className="flex justify-between text-xs font-black text-slate-800 dark:text-white">
@@ -2050,11 +1919,11 @@ export default function ParcelManagement() {
                       <div className="text-[8px] text-slate-400 font-bold bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg p-2 text-center">
                         {isCreatingDirectOrder
                           ? 'This will place order, print KOT, and send order to Kitchen Display.'
-                          : 'This will modify active order items in the KOT session.'}
+                          : 'This will modify active order items in the KOT session.'
+                        }
                       </div>
                       <div className="flex gap-2">
                         <button
-                          type="button"
                           onClick={() => {
                             if (isCreatingDirectOrder) {
                               handleSendToKot({ printKot: false });
@@ -2076,7 +1945,6 @@ export default function ParcelManagement() {
                         </button>
 
                         <button
-                          type="button"
                           onClick={() => {
                             if (isCreatingDirectOrder) {
                               handleSendToKot({ printKot: true });
@@ -2097,8 +1965,8 @@ export default function ParcelManagement() {
                           )}
                         </button>
 
+                        {/* नवीन 'Save, KOT & Bill' बटण */}
                         <button
-                          type="button"
                           onClick={async () => {
                             let resOrder = null;
                             if (isCreatingDirectOrder) {
@@ -2132,14 +2000,17 @@ export default function ParcelManagement() {
           </div>
         )}
 
-        {/* BILL PREVIEW / PAYMENT MODAL */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {/* BILL PREVIEW / PAYMENT modal (Occupied Flow) */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
         {selectedTableLive && !isCreatingDirectOrder && !isAddingItems && checkoutOrder && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
             <div className="absolute inset-0" onClick={() => setSelectedTable(null)} />
             <div className="relative flex flex-col bg-white dark:bg-[#0d0d0d] border border-slate-200 dark:border-white/10 rounded-[2rem] shadow-2xl z-10 w-full max-w-5xl h-[85vh] overflow-hidden">
+              
+              {/* Header bar with close button only */}
               <div className="flex justify-end p-4 pb-0 bg-white dark:bg-[#0d0d0d]">
                 <button
-                  type="button"
                   onClick={() => setSelectedTable(null)}
                   className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl text-slate-400 hover:text-slate-600 transition-all"
                 >
@@ -2147,38 +2018,26 @@ export default function ParcelManagement() {
                 </button>
               </div>
 
-              <div
-                className="flex-1 flex flex-col md:flex-row overflow-hidden bg-white dark:bg-[#0d0d0d] p-6 gap-6"
-                style={{ minHeight: 0 }}
-              >
+              {/* TWO-COLUMN CHECKOUT PANEL */}
+              <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-white dark:bg-[#0d0d0d] p-6 gap-6" style={{ minHeight: 0 }}>
+                
                 {/* Left Column: Bill Receipt Summary */}
                 <div className="md:w-[45%] flex flex-col h-full border border-slate-200/60 dark:border-white/5 rounded-2xl bg-slate-50 dark:bg-white/2 p-5 overflow-hidden">
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-white/30 mb-3">
-                    Bill Receipt
-                  </h3>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-white/30 mb-3">Bill Receipt</h3>
                   <div className="flex-1 overflow-y-auto pr-1">
                     <div className="flex flex-col space-y-4 h-full">
+                      {/* Bill Info Grid */}
                       <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-xl p-4">
                         <div className="space-y-1">
-                          <span className="text-slate-400 dark:text-white/30 uppercase text-[9px] font-black tracking-wider block">
-                            Invoice ID
-                          </span>
-                          <span className="font-extrabold text-slate-800 dark:text-white text-sm">
-                            INV-{checkoutOrder.id}
-                          </span>
+                          <span className="text-slate-400 dark:text-white/30 uppercase text-[9px] font-black tracking-wider block">Invoice ID</span>
+                          <span className="font-extrabold text-slate-800 dark:text-white text-sm">INV-{checkoutOrder.id}</span>
                         </div>
                         <div className="space-y-1">
-                          <span className="text-slate-400 dark:text-white/30 uppercase text-[9px] font-black tracking-wider block">
-                            Parcel Counter
-                          </span>
-                          <span className="font-extrabold text-slate-800 dark:text-white text-sm">
-                            {selectedTableLive.table_name}
-                          </span>
+                          <span className="text-slate-400 dark:text-white/30 uppercase text-[9px] font-black tracking-wider block">Parcel Counter</span>
+                          <span className="font-extrabold text-slate-800 dark:text-white text-sm">{selectedTableLive.table_name}</span>
                         </div>
                         <div className="col-span-2 space-y-1">
-                          <span className="text-slate-400 dark:text-white/30 uppercase text-[9px] font-black tracking-wider block">
-                            Date & Time
-                          </span>
+                          <span className="text-slate-400 dark:text-white/30 uppercase text-[9px] font-black tracking-wider block">Date & Time</span>
                           <span className="font-bold text-slate-600 dark:text-slate-300 text-xs">
                             {checkoutOrder.created_at
                               ? formatDateTimeDDMMYYYY(checkoutOrder.created_at)
@@ -2187,6 +2046,7 @@ export default function ParcelManagement() {
                         </div>
                       </div>
 
+                      {/* Ordered Items Table */}
                       <div className="flex-1 bg-white dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-xl overflow-hidden min-h-0 flex flex-col">
                         <div className="overflow-y-auto flex-1">
                           <table className="w-full text-left border-collapse">
@@ -2199,62 +2059,42 @@ export default function ParcelManagement() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-white/5 text-xs text-slate-700 dark:text-slate-200 font-semibold">
-                              {checkoutOrder.items &&
-                                checkoutOrder.items.map((item, idx) => (
-                                  <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02]">
-                                    <td className="p-3">
-                                      <span className="font-extrabold text-slate-800 dark:text-white block">
-                                        {item.name}
-                                      </span>
-                                      {item.note && (
-                                        <span className="text-[9px] text-amber-500 italic block mt-0.5">
-                                          * Note: {item.note}
-                                        </span>
-                                      )}
-                                    </td>
-                                    <td className="p-3 text-center font-extrabold text-slate-900 dark:text-white">
-                                      {item.quantity}
-                                    </td>
-                                    <td className="p-3 text-right text-slate-500 dark:text-white/40 font-bold">
-                                      {formatCurrency(item.price)}
-                                    </td>
-                                    <td className="p-3 text-right font-black text-slate-900 dark:text-white">
-                                      {formatCurrency(item.price * item.quantity)}
-                                    </td>
-                                  </tr>
-                                ))}
+                              {checkoutOrder.items && checkoutOrder.items.map((item, idx) => (
+                                <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02]">
+                                  <td className="p-3">
+                                    <span className="font-extrabold text-slate-800 dark:text-white block">{item.name}</span>
+                                    {item.note && (
+                                      <span className="text-[9px] text-amber-500 italic block mt-0.5">* Note: {item.note}</span>
+                                    )}
+                                  </td>
+                                  <td className="p-3 text-center font-extrabold text-slate-900 dark:text-white">{item.quantity}</td>
+                                  <td className="p-3 text-right text-slate-500 dark:text-white/40 font-bold">{formatCurrency(item.price)}</td>
+                                  <td className="p-3 text-right font-black text-slate-900 dark:text-white">{formatCurrency(item.price * item.quantity)}</td>
+                                </tr>
+                              ))}
                             </tbody>
                           </table>
                         </div>
                       </div>
 
+                      {/* Calculations Breakdown */}
                       <div className="space-y-2.5 bg-slate-50 dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-xl p-4 text-xs font-bold text-slate-600 dark:text-slate-300">
                         <div className="flex justify-between">
                           <span className="text-slate-400 uppercase tracking-wider text-[10px]">Subtotal:</span>
-                          <span className="text-slate-900 dark:text-white font-extrabold">
-                            {formatCurrency(checkoutOrder.subtotal)}
-                          </span>
+                          <span className="text-slate-900 dark:text-white font-extrabold">{formatCurrency(checkoutOrder.subtotal)}</span>
                         </div>
 
                         {cgstRate > 0 && (
                           <div className="flex justify-between">
-                            <span className="text-slate-400 uppercase tracking-wider text-[10px]">
-                              CGST ({cgstRate}%):
-                            </span>
-                            <span className="text-slate-900 dark:text-white font-extrabold">
-                              {formatCurrency(checkoutOrder.cgst)}
-                            </span>
+                            <span className="text-slate-400 uppercase tracking-wider text-[10px]">CGST ({cgstRate}%):</span>
+                            <span className="text-slate-900 dark:text-white font-extrabold">{formatCurrency(checkoutOrder.cgst)}</span>
                           </div>
                         )}
 
                         {sgstRate > 0 && (
                           <div className="flex justify-between">
-                            <span className="text-slate-400 uppercase tracking-wider text-[10px]">
-                              SGST ({sgstRate}%):
-                            </span>
-                            <span className="text-slate-900 dark:text-white font-extrabold">
-                              {formatCurrency(checkoutOrder.sgst)}
-                            </span>
+                            <span className="text-slate-400 uppercase tracking-wider text-[10px]">SGST ({sgstRate}%):</span>
+                            <span className="text-slate-900 dark:text-white font-extrabold">{formatCurrency(checkoutOrder.sgst)}</span>
                           </div>
                         )}
 
@@ -2266,9 +2106,7 @@ export default function ParcelManagement() {
                             Number(checkoutOrder.sgst)
                         ) > 0 && (
                           <div className="flex justify-between">
-                            <span className="text-slate-400 uppercase tracking-wider text-[10px]">
-                              Service Charge ({serviceChargeRate}%):
-                            </span>
+                            <span className="text-slate-400 uppercase tracking-wider text-[10px]">Service Charge ({serviceChargeRate}%):</span>
                             <span className="text-slate-900 dark:text-white font-extrabold">
                               {formatCurrency(
                                 Math.max(
@@ -2294,19 +2132,16 @@ export default function ParcelManagement() {
 
                 {/* Right Column: Checkout Controls & Action Buttons */}
                 <div className="flex-1 flex flex-col h-full justify-between border border-slate-200/60 dark:border-white/5 rounded-2xl p-5 bg-white dark:bg-white/[0.01]">
+                  
+                  {/* Top: Payment Mode and Configuration */}
                   <div className="space-y-4">
-                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-white/30">
-                      Checkout Settings
-                    </h3>
-
+                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-white/30">Checkout Settings</h3>
+                    
                     <div className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-white/2 border border-slate-100 dark:border-white/5 rounded-xl">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-                        Payment Mode
-                      </span>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Payment Mode</span>
                       <div className="flex gap-1.5">
-                        {['CASH', 'UPI', 'CARD'].map((mode) => (
+                        {['CASH', 'UPI', 'CARD'].map(mode => (
                           <button
-                            type="button"
                             key={mode}
                             onClick={() => setSelectedPaymentMode(mode)}
                             className={`px-4 py-2 text-[10px] font-black rounded-lg cursor-pointer transition-all ${
@@ -2322,24 +2157,23 @@ export default function ParcelManagement() {
                     </div>
                   </div>
 
+                  {/* Bottom: Action Buttons */}
                   <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-white/5">
+                    {/* Row 1: Save, Save & Print, Save & EBill */}
                     <div className="flex flex-col sm:flex-row gap-3">
                       <button
-                        type="button"
                         onClick={() => setSelectedTable(null)}
                         className="flex-1 px-4 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98]"
                       >
                         Save
                       </button>
                       <button
-                        type="button"
                         onClick={() => handleThermalPrintDirect(selectedTableLive, checkoutOrder, false)}
                         className="flex-1 px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                       >
                         Save & Print
                       </button>
                       <button
-                        type="button"
                         onClick={() => handleSaveAndEBill(selectedTableLive, checkoutOrder)}
                         className="flex-1 px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                       >
@@ -2347,9 +2181,9 @@ export default function ParcelManagement() {
                       </button>
                     </div>
 
+                    {/* Row 2: Cancel Order, New Order */}
                     <div className="flex flex-col sm:flex-row gap-3">
                       <button
-                        type="button"
                         disabled={checkoutOrder.status === 'COMPLETED'}
                         onClick={() => handleCancelBill(checkoutOrder.id)}
                         className="flex-1 px-4 py-3 bg-slate-500 hover:bg-slate-600 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2357,7 +2191,6 @@ export default function ParcelManagement() {
                         Cancel Order
                       </button>
                       <button
-                        type="button"
                         disabled={checkoutOrder.status === 'COMPLETED'}
                         onClick={openAddMoreItems}
                         className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/50 text-emerald-600 dark:text-emerald-400 rounded-2xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2367,17 +2200,15 @@ export default function ParcelManagement() {
                       </button>
                     </div>
 
+                    {/* Row 3: Settle & Save */}
                     <div className="pt-3 border-t border-slate-100 dark:border-white/5 flex flex-col sm:flex-row justify-between items-center gap-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-500 dark:text-white/40 uppercase">
-                          Settlement Amount:
-                        </span>
+                        <span className="text-xs font-bold text-slate-500 dark:text-white/40 uppercase">Settlement Amount:</span>
                         <span className="text-sm font-black text-slate-800 dark:text-white">
                           {formatCurrency(checkoutOrder.grand_total)}
                         </span>
                       </div>
                       <button
-                        type="button"
                         onClick={() => {
                           if (checkoutOrder.status === 'COMPLETED') {
                             setSelectedTable(null);
@@ -2395,21 +2226,18 @@ export default function ParcelManagement() {
                     </div>
                   </div>
                 </div>
+
               </div>
             </div>
           </div>
         )}
 
+        {/* ════════════════════════════════════════════════════════════════════ */}
         {/* ADD / EDIT TABLE MODAL */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
         {(isAddTableOpen || editingTable) && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
-            <div
-              className="absolute inset-0 bg-black/75 backdrop-blur-md"
-              onClick={() => {
-                setIsAddTableOpen(false);
-                setEditingTable(null);
-              }}
-            />
+            <div className="absolute inset-0 bg-black/75 backdrop-blur-md" onClick={() => { setIsAddTableOpen(false); setEditingTable(null); }} />
             <div className="relative w-full max-w-md bg-white dark:bg-[#0d0d0d] border border-slate-200 dark:border-white/10 rounded-[2rem] shadow-2xl overflow-hidden">
               <div className="p-8 border-b border-slate-100 dark:border-white/5">
                 <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-wider">
@@ -2421,14 +2249,12 @@ export default function ParcelManagement() {
               </div>
               <form onSubmit={editingTable ? handleEditTable : handleAddTable} className="p-8 space-y-5">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-[#d6b36a]/85 block pl-0.5">
-                    Parcel Code
-                  </label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#d6b36a]/85 block pl-0.5">Parcel Code</label>
                   <input
                     type="text"
                     required
                     value={formTableNumber}
-                    onChange={(e) => setFormTableNumber(e.target.value)}
+                    onChange={e => setFormTableNumber(e.target.value)}
                     placeholder="e.g. P1, P2, P10..."
                     disabled={actionLoading}
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-2xl font-bold text-sm focus:outline-none focus:border-[#ff6b00]"
@@ -2437,10 +2263,7 @@ export default function ParcelManagement() {
                 <div className="flex gap-4 pt-4">
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsAddTableOpen(false);
-                      setEditingTable(null);
-                    }}
+                    onClick={() => { setIsAddTableOpen(false); setEditingTable(null); }}
                     disabled={actionLoading}
                     className="flex-1 px-6 py-4 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/60 rounded-2xl font-black text-xs uppercase tracking-wider"
                   >
@@ -2451,7 +2274,7 @@ export default function ParcelManagement() {
                     disabled={actionLoading}
                     className="flex-1 px-6 py-4 bg-gradient-to-r from-[#ff6b00] to-[#ff8524] text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg shadow-orange-500/20"
                   >
-                    {actionLoading ? 'Saving...' : editingTable ? 'Save Changes' : 'Create Table'}
+                    {actionLoading ? 'Saving...' : (editingTable ? 'Save Changes' : 'Create Table')}
                   </button>
                 </div>
               </form>
@@ -2459,7 +2282,9 @@ export default function ParcelManagement() {
           </div>
         )}
 
+        {/* ════════════════════════════════════════════════════════════════════ */}
         {/* MANAGE TABLES LIST MODAL */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
         {isManageTablesOpen && (
           <div className="fixed inset-0 z-[90] flex items-center justify-center p-6 animate-in fade-in duration-300">
             <div className="absolute inset-0 bg-black/75 backdrop-blur-md" onClick={() => setIsManageTablesOpen(false)} />
@@ -2474,7 +2299,6 @@ export default function ParcelManagement() {
                   </p>
                 </div>
                 <button
-                  type="button"
                   onClick={() => setIsManageTablesOpen(false)}
                   className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl text-slate-400 hover:text-slate-600 transition-all"
                 >
@@ -2483,34 +2307,22 @@ export default function ParcelManagement() {
               </div>
               <div className="flex-1 overflow-y-auto p-6 space-y-3">
                 {parcelTables.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400 font-bold text-xs">
-                    No parcel tables created yet.
-                  </div>
+                  <div className="text-center py-8 text-slate-400 font-bold text-xs">No parcel tables created yet.</div>
                 ) : (
                   parcelTables.map((table) => (
-                    <div
-                      key={table.id}
-                      className="flex items-center justify-between bg-slate-50 dark:bg-white/2 p-4 rounded-2xl border border-slate-100 dark:border-white/5"
-                    >
+                    <div key={table.id} className="flex items-center justify-between bg-slate-50 dark:bg-white/2 p-4 rounded-2xl border border-slate-100 dark:border-white/5">
                       <div>
                         <span className="text-base font-black text-slate-900 dark:text-white">{table.table_name}</span>
                         <span className="text-xs text-slate-400 font-bold ml-2">({table.table_number})</span>
                         <div className="flex gap-2.5 mt-1">
-                          <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">
-                            Sort Order: {table.display_order || 0}
-                          </span>
-                          <span
-                            className={`text-[9px] font-black uppercase tracking-wider ${
-                              table.is_active ? 'text-emerald-500' : 'text-slate-400'
-                            }`}
-                          >
+                          <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Sort Order: {table.display_order || 0}</span>
+                          <span className={`text-[9px] font-black uppercase tracking-wider ${table.is_active ? 'text-emerald-500' : 'text-slate-400'}`}>
                             {table.is_active ? 'Active' : 'Inactive'}
                           </span>
                         </div>
                       </div>
                       <div className="flex gap-2">
                         <button
-                          type="button"
                           onClick={() => {
                             startEditing(table);
                             setIsManageTablesOpen(false);
@@ -2520,7 +2332,6 @@ export default function ParcelManagement() {
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
-                          type="button"
                           onClick={() => handleDeleteTable(table.id)}
                           className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 rounded-xl transition-all cursor-pointer"
                         >
@@ -2534,6 +2345,7 @@ export default function ParcelManagement() {
             </div>
           </div>
         )}
+
       </div>
 
       {/* Digital E-Bill Receipt Modal */}
@@ -2542,7 +2354,6 @@ export default function ParcelManagement() {
           <div className="relative w-full max-w-md bg-white dark:bg-[#111] border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="bg-emerald-600 text-white p-5 text-center relative">
               <button
-                type="button"
                 onClick={() => setEBillModalData(null)}
                 className="absolute right-4 top-4 p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
               >
@@ -2552,7 +2363,9 @@ export default function ParcelManagement() {
                 Paid · {eBillModalData.paymentMode}
               </span>
               <h3 className="text-xl font-black tracking-tight">{eBillModalData.hotelName}</h3>
-              {eBillModalData.address && <p className="text-[11px] opacity-90 mt-0.5">{eBillModalData.address}</p>}
+              {eBillModalData.address && (
+                <p className="text-[11px] opacity-90 mt-0.5">{eBillModalData.address}</p>
+              )}
               {eBillModalData.gstNumber && (
                 <p className="text-[10px] font-mono opacity-80 mt-0.5">GSTIN: {eBillModalData.gstNumber}</p>
               )}
@@ -2576,10 +2389,7 @@ export default function ParcelManagement() {
 
               <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
                 {eBillModalData.items.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="flex justify-between items-center font-bold text-slate-700 dark:text-slate-200"
-                  >
+                  <div key={idx} className="flex justify-between items-center font-bold text-slate-700 dark:text-slate-200">
                     <div>
                       <span>{item.name}</span>
                       <span className="text-slate-400 text-[11px] ml-1.5">x{item.quantity}</span>
@@ -2617,7 +2427,7 @@ export default function ParcelManagement() {
                   type="button"
                   onClick={() => {
                     const encodedData = window.btoa(unescape(encodeURIComponent(JSON.stringify(eBillModalData))));
-                    const eBillUrl = `${window.location.origin}/#/ebill?data=${encodedData}`;
+                    const eBillUrl = `${window.location.origin}/ebill?data=${encodedData}`;
                     const msg = `*${eBillModalData.hotelName} - Digital E-Bill* 🧾\n\nInvoice: ${eBillModalData.invoiceId}\nParcel: ${eBillModalData.tableName}\nTotal Paid: *₹${eBillModalData.grandTotal.toFixed(2)}*\n\n👇 View & Download your E-Bill:\n${eBillUrl}\n\nThank you for ordering with us!`;
                     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
                   }}
@@ -2627,16 +2437,14 @@ export default function ParcelManagement() {
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    handleThermalPrint({
-                      ...eBillModalData,
-                      orderId: eBillModalData.invoiceId,
-                      tableNumber: eBillModalData.tableName,
-                      cgstRate,
-                      sgstRate,
-                      serviceChargeRate
-                    })
-                  }
+                  onClick={() => handleThermalPrint({
+                    ...eBillModalData,
+                    orderId: eBillModalData.invoiceId,
+                    tableNumber: eBillModalData.tableName,
+                    cgstRate,
+                    sgstRate,
+                    serviceChargeRate
+                  })}
                   className="px-5 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer"
                 >
                   Print / PDF
