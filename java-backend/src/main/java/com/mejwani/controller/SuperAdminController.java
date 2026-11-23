@@ -36,9 +36,9 @@ public class SuperAdminController {
 
     private final Map<String, Object> platformSettings = initDefaultSettings();
     private final AtomicLong paymentSeq = new AtomicLong(1001);
-    private final List> paymentRecords = Collections.synchronizedList(new ArrayList<>());
+    private final List<Map<String, Object>> paymentRecords = Collections.synchronizedList(new ArrayList<>());
     private final Map<String, byte[]> backupSnapshots = new ConcurrentHashMap<>();
-    private final List> backupMetadataList = Collections.synchronizedList(new ArrayList<>());
+    private final List<Map<String, Object>> backupMetadataList = Collections.synchronizedList(new ArrayList<>());
 
     private static Map<String, Object> initDefaultSettings() {
         Map<String, Object> smtp = new HashMap<>();
@@ -129,7 +129,7 @@ public class SuperAdminController {
 
     @GetMapping("/hotels")
     public ResponseEntity<?> getAllHotels() {
-        List> hotels = hotelRepository.findAll().stream()
+        List<Map<String, Object>> hotels = hotelRepository.findAll().stream()
                 .map(this::serializeHotel).toList();
         return ResponseEntity.ok(Map.of("success", true, "data", hotels));
     }
@@ -289,7 +289,7 @@ public class SuperAdminController {
 
     @GetMapping("/admins")
     public ResponseEntity<?> getAllAdmins() {
-        List> admins = adminRepository.findAll().stream()
+        List<Map<String, Object>> admins = adminRepository.findAll().stream()
                 .map(this::serializeAdmin).toList();
         return ResponseEntity.ok(Map.of("success", true, "data", admins));
     }
@@ -366,7 +366,7 @@ public class SuperAdminController {
             }
         }
 
-        List> recentHotels = allHotels.stream()
+        List<Map<String, Object>> recentHotels = allHotels.stream()
                 .map(this::serializeHotel).toList();
 
         Map<String, Object> metrics = new HashMap<>();
@@ -412,14 +412,14 @@ public class SuperAdminController {
 
     @GetMapping("/billing")
     public ResponseEntity<?> getBilling() {
-        List> activeHotelsList = hotelRepository.findAll().stream()
+        List<Hotel> activeHotelsList = hotelRepository.findAll().stream()
                 .filter(h -> !"suspended".equalsIgnoreCase(h.getStatus()))
                 .map(this::serializeHotel)
                 .toList();
 
         double totalBilled = 0;
         double pendingBilled = 0;
-        List> paymentsCopy;
+        List<Map<String, Object>> paymentsCopy;
         synchronized (paymentRecords) {
             paymentsCopy = new ArrayList<>(paymentRecords);
             for (Map<String, Object> p : paymentsCopy) {
