@@ -412,7 +412,7 @@ public class SuperAdminController {
 
     @GetMapping("/billing")
     public ResponseEntity<?> getBilling() {
-        List<Hotel> activeHotelsList = hotelRepository.findAll().stream()
+        List<Map<String, Object>> activeHotelsList = hotelRepository.findAll().stream()
                 .filter(h -> !"suspended".equalsIgnoreCase(h.getStatus()))
                 .map(this::serializeHotel)
                 .toList();
