@@ -23,6 +23,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 @RestController
@@ -41,16 +42,16 @@ public class SuperAdminController {
     private ObjectMapper objectMapper;
     private Map<String, Object> platformSettings;
     private AtomicLong paymentSeq;
-    private List<Map<String, Object>> paymentRecords;
+    private List> paymentRecords;
     private Map<String, byte[]> backupSnapshots;
-    private List<Map<String, Object>> backupMetadataList;
+    private List> backupMetadataList;
 
     @PostConstruct
     public void initStores() {
         this.objectMapper = new ObjectMapper();
         this.paymentSeq = new AtomicLong(1001);
         this.paymentRecords = Collections.synchronizedList(new ArrayList<>());
-        this.backupSnapshots = new HashMap<>();
+        this.backupSnapshots = new ConcurrentHashMap<>();
         this.backupMetadataList = Collections.synchronizedList(new ArrayList<>());
 
         Map<String, Object> smtp = new HashMap<>();
@@ -61,7 +62,7 @@ public class SuperAdminController {
         smtp.put("sender_email", "");
         smtp.put("secure", false);
 
-        Map<String, Object> settings = new HashMap<>();
+        Map<String, Object> settings = new ConcurrentHashMap<>();
         settings.put("brandingLogo", "");
         settings.put("platformName", "Mejwani Command Center");
         settings.put("supportEmail", "support@mejwani.com");
@@ -141,7 +142,7 @@ public class SuperAdminController {
 
     @GetMapping("/hotels")
     public ResponseEntity<?> getAllHotels() {
-        List<Map<String, Object>> hotels = hotelRepository.findAll().stream()
+        List> hotels = hotelRepository.findAll().stream()
                 .map(this::serializeHotel).toList();
         return ResponseEntity.ok(Map.of("success", true, "data", hotels));
     }
@@ -301,7 +302,7 @@ public class SuperAdminController {
 
     @GetMapping("/admins")
     public ResponseEntity<?> getAllAdmins() {
-        List<Map<String, Object>> admins = adminRepository.findAll().stream()
+        List> admins = adminRepository.findAll().stream()
                 .map(this::serializeAdmin).toList();
         return ResponseEntity.ok(Map.of("success", true, "data", admins));
     }
@@ -378,7 +379,7 @@ public class SuperAdminController {
             }
         }
 
-        List<Map<String, Object>> recentHotels = allHotels.stream()
+        List> recentHotels = allHotels.stream()
                 .map(this::serializeHotel).toList();
 
         Map<String, Object> metrics = new HashMap<>();
@@ -424,14 +425,14 @@ public class SuperAdminController {
 
     @GetMapping("/billing")
     public ResponseEntity<?> getBilling() {
-        List<Map<String, Object>> activeHotelsList = hotelRepository.findAll().stream()
+        List> activeHotelsList = hotelRepository.findAll().stream()
                 .filter(h -> !"suspended".equalsIgnoreCase(h.getStatus()))
                 .map(this::serializeHotel)
                 .toList();
 
         double totalBilled = 0;
         double pendingBilled = 0;
-        List<Map<String, Object>> paymentsCopy;
+        List> paymentsCopy;
         synchronized (paymentRecords) {
             paymentsCopy = new ArrayList<>(paymentRecords);
             for (Map<String, Object> p : paymentsCopy) {
@@ -643,7 +644,22 @@ public class SuperAdminController {
     }
 
     @GetMapping("/support/super/tickets")
-    public ResponseEntity<?> getSupportTickets(@RequestParam(required = false) String status) {
-        return ResponseEntity.ok(Map.of("success", true, "tickets", List.of()));
+    public ResponseEntity<?> getSupportTickets(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) Long hotelId,
+            @RequestParam(required = false) String search) {
+        Map<String, Object> counts = new HashMap<>();
+        counts.put("total", 0);
+        counts.put("open", 0);
+        counts.put("inProgress", 0);
+        counts.put("resolved", 0);
+        counts.put("closed", 0);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("success", true);
+        body.put("tickets", List.of());
+        body.put("counts", counts);
+        return ResponseEntity.ok(body);
     }
 }

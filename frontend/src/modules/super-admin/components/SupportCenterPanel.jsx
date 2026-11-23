@@ -12,11 +12,8 @@ import {
   Phone, 
   Mail, 
   Tag, 
-  SlidersHorizontal,
   ChevronRight,
   Eye,
-  Check,
-  Calendar,
   AlertCircle,
   Trash2
 } from 'lucide-react';
@@ -25,9 +22,17 @@ import { API_BASE } from '../../../shared/services/apiBase';
 import { superAdminRequest } from '../services/superAdminApi';
 import socket from '../../../shared/services/socketClient';
 
+const DEFAULT_COUNTS = {
+  total: 0,
+  open: 0,
+  inProgress: 0,
+  resolved: 0,
+  closed: 0
+};
+
 export default function SupportCenterPanel() {
   const [tickets, setTickets] = useState([]);
-  const [counts, setCounts] = useState({ total: 0, open: 0, inProgress: 0, resolved: 0, closed: 0 });
+  const [counts, setCounts] = useState(DEFAULT_COUNTS);
   const [hotels, setHotels] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -80,8 +85,7 @@ export default function SupportCenterPanel() {
     };
   }, [search, statusFilter, categoryFilter, hotelFilter]);
 
-  const handleNewTicketRealtime = (ticket) => {
-    // Re-fetch to keep everything synced and refresh stats
+  const handleNewTicketRealtime = () => {
     fetchTickets();
   };
 
@@ -92,9 +96,16 @@ export default function SupportCenterPanel() {
   const fetchHotelsList = async () => {
     try {
       const hotelsData = await superAdminRequest('/hotels');
-      setHotels(hotelsData || []);
+      if (Array.isArray(hotelsData)) {
+        setHotels(hotelsData);
+      } else if (Array.isArray(hotelsData?.data)) {
+        setHotels(hotelsData.data);
+      } else {
+        setHotels([]);
+      }
     } catch (err) {
       console.error('Error fetching hotels:', err);
+      setHotels([]);
     }
   };
 
@@ -103,18 +114,26 @@ export default function SupportCenterPanel() {
     try {
       let query = `/support/super/tickets?`;
       if (search) query += `search=${encodeURIComponent(search)}&`;
-      if (statusFilter) query += `status=${statusFilter}&`;
-      if (categoryFilter) query += `category=${categoryFilter}&`;
-      if (hotelFilter) query += `hotelId=${hotelFilter}&`;
+      if (statusFilter) query += `status=${encodeURIComponent(statusFilter)}&`;
+      if (categoryFilter) query += `category=${encodeURIComponent(categoryFilter)}&`;
+      if (hotelFilter) query += `hotelId=${encodeURIComponent(hotelFilter)}&`;
 
       const res = await superAdminRequest(query);
-      if (res && res.tickets) {
-        setTickets(res.tickets);
-        setCounts(res.counts);
+      if (res) {
+        setTickets(Array.isArray(res.tickets) ? res.tickets : []);
+        setCounts({
+          ...DEFAULT_COUNTS,
+          ...(res.counts && typeof res.counts === 'object' ? res.counts : {})
+        });
+      } else {
+        setTickets([]);
+        setCounts(DEFAULT_COUNTS);
       }
     } catch (err) {
       console.error('Error fetching tickets:', err);
       toast.error('Failed to load support tickets');
+      setTickets([]);
+      setCounts(DEFAULT_COUNTS);
     } finally {
       setLoading(false);
     }
@@ -152,7 +171,6 @@ export default function SupportCenterPanel() {
       const resData = await response.json();
       if (response.ok && resData.success) {
         toast.success(`Status updated to ${newStatus}`);
-        // Refresh detail view and summary list
         fetchTicketDetails(selectedTicketId);
         fetchTickets();
       } else {
@@ -308,7 +326,7 @@ export default function SupportCenterPanel() {
             <span className="text-[10px] font-black uppercase tracking-wider">Total Tickets</span>
             <FileText className="w-4 h-4 text-slate-400" />
           </div>
-          <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{counts.total}</p>
+          <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{counts?.total ?? 0}</p>
         </div>
         {/* Open */}
         <div className="bg-amber-500/5 border border-amber-500/10 p-4 rounded-2xl">
@@ -316,7 +334,7 @@ export default function SupportCenterPanel() {
             <span className="text-[10px] font-black uppercase tracking-wider">Open</span>
             <AlertCircle className="w-4 h-4" />
           </div>
-          <p className="text-2xl font-black text-amber-500 mt-1">{counts.open}</p>
+          <p className="text-2xl font-black text-amber-500 mt-1">{counts?.open ?? 0}</p>
         </div>
         {/* In Progress */}
         <div className="bg-blue-500/5 border border-blue-500/10 p-4 rounded-2xl">
@@ -324,7 +342,7 @@ export default function SupportCenterPanel() {
             <span className="text-[10px] font-black uppercase tracking-wider">In Progress</span>
             <Clock className="w-4 h-4" />
           </div>
-          <p className="text-2xl font-black text-blue-400 mt-1">{counts.inProgress}</p>
+          <p className="text-2xl font-black text-blue-400 mt-1">{counts?.inProgress ?? 0}</p>
         </div>
         {/* Resolved */}
         <div className="bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-2xl">
@@ -332,7 +350,7 @@ export default function SupportCenterPanel() {
             <span className="text-[10px] font-black uppercase tracking-wider">Resolved</span>
             <CheckCircle className="w-4 h-4" />
           </div>
-          <p className="text-2xl font-black text-emerald-500 mt-1">{counts.resolved}</p>
+          <p className="text-2xl font-black text-emerald-500 mt-1">{counts?.resolved ?? 0}</p>
         </div>
         {/* Closed */}
         <div className="bg-slate-500/5 border border-slate-200 dark:border-white/5 p-4 rounded-2xl">
@@ -340,7 +358,7 @@ export default function SupportCenterPanel() {
             <span className="text-[10px] font-black uppercase tracking-wider">Closed</span>
             <XCircle className="w-4 h-4" />
           </div>
-          <p className="text-2xl font-black text-slate-500 mt-1">{counts.closed}</p>
+          <p className="text-2xl font-black text-slate-500 mt-1">{counts?.closed ?? 0}</p>
         </div>
       </div>
 
@@ -490,7 +508,6 @@ export default function SupportCenterPanel() {
       <AnimatePresence>
         {selectedTicketId && ticketDetails && (
           <div className="fixed inset-0 z-[9999] flex justify-end bg-slate-950/60 backdrop-blur-sm select-none">
-            {/* Backdrop click closer */}
             <div className="absolute inset-0" onClick={closeTicketDrawer} />
 
             <motion.div
