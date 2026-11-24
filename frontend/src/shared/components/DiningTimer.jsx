@@ -27,7 +27,7 @@ function parseOccupiedTimeMs(occupiedAt) {
   const raw = String(occupiedAt).trim();
   if (!raw) return NaN;
 
-  // If SQL datetime like "2026-11-22 17:00:00" has no timezone marker, treat as local/ISO safely
+  // Normalize SQL datetime space to ISO 'T'
   const normalized = /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}/.test(raw)
     ? raw.replace(' ', 'T')
     : raw;
