@@ -58,6 +58,84 @@ const encodeEBillPayload = (obj) => {
   return encodeURIComponent(window.btoa(binary));
 };
 
+// Generates a clean scannable-style matrix pattern from text for demo QR display
+const buildDemoQrMatrix = (text, size = 21) => {
+  const matrix = Array.from({ length: size }, () => Array(size).fill(false));
+
+  const drawFinder = (r0, c0) => {
+    for (let r = -1; r <= 7; r += 1) {
+      for (let c = -1; c <= 7; c += 1) {
+        const rr = r0 + r;
+        const cc = c0 + c;
+        if (rr < 0 || rr >= size || cc < 0 || cc >= size) continue;
+        const onBorder = r === 0 || r === 6 || c === 0 || c === 6;
+        const onCenter = r >= 2 && r <= 4 && c >= 2 && c <= 4;
+        matrix[rr][cc] = onBorder || onCenter;
+      }
+    }
+  };
+
+  drawFinder(0, 0);
+  drawFinder(0, size - 7);
+  drawFinder(size - 7, 0);
+
+  let hash = 2166136261;
+  const input = String(text || 'DEMO-QR');
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  for (let r = 0; r < size; r += 1) {
+    for (let c = 0; c < size; c += 1) {
+      const inTopLeft = r <= 7 && c <= 7;
+      const inTopRight = r <= 7 && c >= size - 8;
+      const inBottomLeft = r >= size - 8 && c <= 7;
+      if (inTopLeft || inTopRight || inBottomLeft) continue;
+
+      hash ^= (r * 31 + c * 17 + iSafe(r, c)) >>> 0;
+      hash = Math.imul(hash, 16777619);
+      matrix[r][c] = ((hash >>> 0) & 1) === 1;
+    }
+  }
+
+  return matrix;
+};
+
+const iSafe = (r, c) => (r * c) % 97;
+
+function DemoQrBox({ value, size = 136 }) {
+  const matrix = useMemo(() => buildDemoQrMatrix(value, 21), [value]);
+  const cellSize = size / matrix.length;
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      className="bg-white rounded-xl block"
+      role="img"
+      aria-label="Demo Razorpay UPI QR Code"
+    >
+      <rect x="0" y="0" width={size} height={size} fill="#ffffff" />
+      {matrix.map((row, rIdx) =>
+        row.map((isDark, cIdx) =>
+          isDark ? (
+            <rect
+              key={`${rIdx}-${cIdx}`}
+              x={cIdx * cellSize}
+              y={rIdx * cellSize}
+              width={cellSize + 0.35}
+              height={cellSize + 0.35}
+              fill="#0f172a"
+            />
+          ) : null
+        )
+      )}
+    </svg>
+  );
+}
+
 const showPrinterErrorToast = (message, toastId, navigate) => {
   toast.error(
     (t) => (
@@ -112,6 +190,9 @@ export default function OrdersPage() {
   const blinkTimerRef = useRef(null);
   const recentlySettledOrderIdsRef = useRef(new Set());
   const recentlySettledTableIdsRef = useRef(new Set());
+
+  const [upiPaymentState, setUpiPaymentState] = useState('IDLE'); // 'IDLE' | 'WAITING' | 'SUCCESS'
+  const upiSettleTimerRef = useRef(null);
 
   const markRecentlySettled = useCallback((orderId, tableId) => {
     if (orderId != null) {
@@ -734,6 +815,13 @@ export default function OrdersPage() {
     return { subtotal, cgst, sgst, serviceCharge, grandTotal };
   }, [checkoutOrder, cgstRate, sgstRate, serviceChargeRate]);
 
+  const demoUpiQrPayload = useMemo(() => {
+    if (!checkoutOrder) return '';
+    const amountStr = Number(billingTotals.grandTotal || 0).toFixed(2);
+    const merchantName = encodeURIComponent(systemSettings?.branding?.name || 'MEJWANI DEMO');
+    return `upi://pay?pa=demo.razorpay@okaxis&pn=${merchantName}&am=${amountStr}&cu=INR&tn=INV-${checkoutOrder.id}`;
+  }, [checkoutOrder, billingTotals.grandTotal, systemSettings]);
+
   const handleSubmitAdditionalItems = async (options = {}) => {
     if (!activeOrderForSelectedTable || !selectedTableLive) return;
 
@@ -1150,6 +1238,155 @@ export default function OrdersPage() {
     }
   };
 
+  const handleCompletePayment = useCallback(
+    async (orderId, shouldClose = true) => {
+      if (!orderId) return false;
+      try {
+        const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
+        const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
+
+        const targetOrder = orders.find((ord) => String(ord.id) === String(orderId)) || checkoutOrder;
+        const targetTableId = getOrderTableId(targetOrder) ?? selectedTableLive?.id ?? null;
+
+        markRecentlySettled(orderId, targetTableId);
+        setCheckoutOrder(null);
+        setUpiPaymentState('IDLE');
+
+        setTables((prev) =>
+          prev.map((t) => {
+            const matchesId = targetTableId != null && String(t.id) === String(targetTableId);
+            const matchesName =
+              targetOrder?.table_name &&
+              normalizeTableLabel(t.table_name) === normalizeTableLabel(targetOrder.table_name);
+            if (matchesId || matchesName) {
+              if (t.id != null) markRecentlySettled(null, t.id);
+              return {
+                ...t,
+                status: 'available',
+                occupied_at: null,
+                currentOrder: null,
+                current_order: null,
+                current_amount: 0,
+                order_total: 0
+              };
+            }
+            return t;
+          })
+        );
+        setOrders((prev) =>
+          prev.map((o) => (String(o.id) === String(orderId) ? { ...o, status: 'COMPLETED' } : o))
+        );
+
+        if (shouldClose) {
+          setSelectedTable(null);
+          setIsAddingItems(false);
+          setIsCreatingDirectOrder(false);
+          setAdditionalItems([]);
+        }
+
+        if (String(orderId).startsWith('TBL-')) {
+          if (targetTableId != null) {
+            await authorizedFetch(`${API_BASE}/tables/${targetTableId}/release?hotelId=${hotelId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            }).catch(() => {});
+          }
+          if (socket && hotelId) {
+            socket.emit('table-released', { hotelId, tableId: targetTableId });
+            socket.emit('table-updated', { hotelId, tableId: targetTableId, status: 'available' });
+          }
+          toast.success('Table settled and marked AVAILABLE.');
+          await Promise.all([fetchOrders(), fetchTables()]);
+          fetchSales();
+          return true;
+        }
+
+        const res = await authorizedFetch(`${API_BASE}/orders/pay/${orderId}?hotelId=${hotelId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentMode: selectedPaymentMode || 'CASH' })
+        });
+        const data = await safeParseJson(res);
+        if (res.ok && data.success) {
+          if (targetTableId != null) {
+            await authorizedFetch(`${API_BASE}/tables/${targetTableId}/release?hotelId=${hotelId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            }).catch(() => {});
+          }
+          if (socket && hotelId) {
+            socket.emit('table-released', { hotelId, tableId: targetTableId, orderId });
+            socket.emit('table-updated', { hotelId, tableId: targetTableId, status: 'available' });
+          }
+          toast.success('Bill settled and table is now AVAILABLE.');
+          await Promise.all([fetchOrders(), fetchTables()]);
+          fetchSales();
+          return true;
+        } else {
+          toast.error(data.message || 'Failed to complete payment.');
+          await Promise.all([fetchOrders(), fetchTables()]);
+          fetchSales();
+          return false;
+        }
+      } catch (err) {
+        console.error('Failed to checkout:', err);
+        toast.error('Failed to connect to server to complete payment.');
+        await Promise.all([fetchOrders(), fetchTables()]);
+        fetchSales();
+        return false;
+      }
+    },
+    [
+      orders,
+      checkoutOrder,
+      selectedTableLive,
+      markRecentlySettled,
+      fetchOrders,
+      fetchTables,
+      fetchSales,
+      selectedPaymentMode
+    ]
+  );
+
+  const handleDemoUpiPaymentSuccess = useCallback(
+    (orderId) => {
+      if (!orderId || upiPaymentState === 'SUCCESS') return;
+      setUpiPaymentState('SUCCESS');
+      toast.success('Payment successful', {
+        style: { borderRadius: '10px', background: '#16a34a', color: '#fff' }
+      });
+
+      if (upiSettleTimerRef.current) {
+        clearTimeout(upiSettleTimerRef.current);
+      }
+
+      upiSettleTimerRef.current = setTimeout(async () => {
+        await handleCompletePayment(orderId, true);
+      }, 1500);
+    },
+    [upiPaymentState, handleCompletePayment]
+  );
+
+  useEffect(() => {
+    if (selectedPaymentMode === 'UPI' && checkoutOrder) {
+      setUpiPaymentState('WAITING');
+    } else {
+      setUpiPaymentState('IDLE');
+      if (upiSettleTimerRef.current) {
+        clearTimeout(upiSettleTimerRef.current);
+        upiSettleTimerRef.current = null;
+      }
+    }
+  }, [selectedPaymentMode, checkoutOrder]);
+
+  useEffect(() => {
+    return () => {
+      if (upiSettleTimerRef.current) {
+        clearTimeout(upiSettleTimerRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
     const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
@@ -1161,7 +1398,7 @@ export default function OrdersPage() {
 
     const timer = setInterval(() => {
       syncTableState();
-    }, 4000);
+    }, 10000);
 
     const debounceTimers = {
       sync: null,
@@ -1190,6 +1427,13 @@ export default function OrdersPage() {
       triggerDebounced('syncTable', () => {
         syncTableState();
       });
+    };
+
+    const handleDemoUpiSocketSuccess = (payload = {}) => {
+      const targetId = payload.orderId ?? payload.order_id ?? checkoutOrder?.id;
+      if (targetId && checkoutOrder && String(targetId) === String(checkoutOrder.id)) {
+        handleDemoUpiPaymentSuccess(checkoutOrder.id);
+      }
     };
 
     const handleFinalBillRequest = (payload = {}) => {
@@ -1334,6 +1578,7 @@ export default function OrdersPage() {
     socket.on('order-updated', handleTableActivity);
     socket.on('table-updated', handleTableActivity);
     socket.on('bill-created', handleTableActivity);
+    socket.on('demo-upi-paid', handleDemoUpiSocketSuccess);
     socket.on('final-bill-request', handleFinalBillRequest);
     socket.on('bill-requested', handleFinalBillRequest);
     socket.on('request-final-bill', handleFinalBillRequest);
@@ -1358,6 +1603,7 @@ export default function OrdersPage() {
       socket.off('order-updated', handleTableActivity);
       socket.off('table-updated', handleTableActivity);
       socket.off('bill-created', handleTableActivity);
+      socket.off('demo-upi-paid', handleDemoUpiSocketSuccess);
       socket.off('final-bill-request', handleFinalBillRequest);
       socket.off('bill-requested', handleFinalBillRequest);
       socket.off('request-final-bill', handleFinalBillRequest);
@@ -1374,7 +1620,9 @@ export default function OrdersPage() {
     syncTableState,
     clearAckTimeout,
     onPrintJobAcknowledgedLocal,
-    focusAndBlinkTableForBilling
+    focusAndBlinkTableForBilling,
+    checkoutOrder,
+    handleDemoUpiPaymentSuccess
   ]);
 
   useEffect(() => {
@@ -1534,103 +1782,6 @@ export default function OrdersPage() {
     });
   }, [tablesByArea]);
 
-  const handleCompletePayment = async (orderId, shouldClose = true) => {
-    if (!orderId) return false;
-    try {
-      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
-
-      const targetOrder = orders.find((ord) => String(ord.id) === String(orderId)) || checkoutOrder;
-      const targetTableId = getOrderTableId(targetOrder) ?? selectedTableLive?.id ?? null;
-
-      markRecentlySettled(orderId, targetTableId);
-      setCheckoutOrder(null);
-
-      setTables((prev) =>
-        prev.map((t) => {
-          const matchesId = targetTableId != null && String(t.id) === String(targetTableId);
-          const matchesName =
-            targetOrder?.table_name &&
-            normalizeTableLabel(t.table_name) === normalizeTableLabel(targetOrder.table_name);
-          if (matchesId || matchesName) {
-            if (t.id != null) markRecentlySettled(null, t.id);
-            return {
-              ...t,
-              status: 'available',
-              occupied_at: null,
-              currentOrder: null,
-              current_order: null,
-              current_amount: 0,
-              order_total: 0
-            };
-          }
-          return t;
-        })
-      );
-      setOrders((prev) =>
-        prev.map((o) => (String(o.id) === String(orderId) ? { ...o, status: 'COMPLETED' } : o))
-      );
-
-      if (shouldClose) {
-        setSelectedTable(null);
-        setIsAddingItems(false);
-        setIsCreatingDirectOrder(false);
-        setAdditionalItems([]);
-      }
-
-      if (String(orderId).startsWith('TBL-')) {
-        if (targetTableId != null) {
-          await authorizedFetch(`${API_BASE}/tables/${targetTableId}/release?hotelId=${hotelId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-          }).catch(() => {});
-        }
-        if (socket && hotelId) {
-          socket.emit('table-released', { hotelId, tableId: targetTableId });
-          socket.emit('table-updated', { hotelId, tableId: targetTableId, status: 'available' });
-        }
-        toast.success('Table settled and marked AVAILABLE.');
-        await Promise.all([fetchOrders(), fetchTables()]);
-        fetchSales();
-        return true;
-      }
-
-      const res = await authorizedFetch(`${API_BASE}/orders/pay/${orderId}?hotelId=${hotelId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentMode: selectedPaymentMode || 'CASH' })
-      });
-      const data = await safeParseJson(res);
-      if (res.ok && data.success) {
-        if (targetTableId != null) {
-          await authorizedFetch(`${API_BASE}/tables/${targetTableId}/release?hotelId=${hotelId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-          }).catch(() => {});
-        }
-        if (socket && hotelId) {
-          socket.emit('table-released', { hotelId, tableId: targetTableId, orderId });
-          socket.emit('table-updated', { hotelId, tableId: targetTableId, status: 'available' });
-        }
-        toast.success('Bill settled and table is now AVAILABLE.');
-        await Promise.all([fetchOrders(), fetchTables()]);
-        fetchSales();
-        return true;
-      } else {
-        toast.error(data.message || 'Failed to complete payment.');
-        await Promise.all([fetchOrders(), fetchTables()]);
-        fetchSales();
-        return false;
-      }
-    } catch (err) {
-      console.error('Failed to checkout:', err);
-      toast.error('Failed to connect to server to complete payment.');
-      await Promise.all([fetchOrders(), fetchTables()]);
-      fetchSales();
-      return false;
-    }
-  };
-
   const handleSaveAndEBill = async (table, order) => {
     if (!table || !order) return;
 
@@ -1776,14 +1927,14 @@ export default function OrdersPage() {
           <table class="totals">
             <tr>
               <td>Subtotal:</td>
-              <td style="text-align: right;">${billData.currencySymbol || '₹'}${Number(billData.subtotal).toFixed(2)}</td>
+              <td style="text-align: right;">${billData.currencySymbol || ''}${Number(billData.subtotal).toFixed(2)}</td>
             </tr>
-            ${billData.cgst > 0 ? `<tr><td>CGST (${billData.cgstRate}%):</td><td style="text-align: right;">${billData.currencySymbol || '₹'}${Number(billData.cgst).toFixed(2)}</td></tr>` : ''}
-            ${billData.sgst > 0 ? `<tr><td>SGST (${billData.sgstRate}%):</td><td style="text-align: right;">${billData.currencySymbol || '₹'}${Number(billData.sgst).toFixed(2)}</td></tr>` : ''}
-            ${billData.serviceCharge > 0 ? `<tr><td>Service Charge (${billData.serviceChargeRate}%):</td><td style="text-align: right;">${billData.currencySymbol || '₹'}${Number(billData.serviceCharge).toFixed(2)}</td></tr>` : ''}
+            ${billData.cgst > 0 ? `<tr><td>CGST (${billData.cgstRate}%):</td><td style="text-align: right;">${billData.currencySymbol || ''}${Number(billData.cgst).toFixed(2)}</td></tr>` : ''}
+            ${billData.sgst > 0 ? `<tr><td>SGST (${billData.sgstRate}%):</td><td style="text-align: right;">${billData.currencySymbol || ''}${Number(billData.sgst).toFixed(2)}</td></tr>` : ''}
+            ${billData.serviceCharge > 0 ? `<tr><td>Service Charge (${billData.serviceChargeRate}%):</td><td style="text-align: right;">${billData.currencySymbol || ''}${Number(billData.serviceCharge).toFixed(2)}</td></tr>` : ''}
             <tr class="bold" style="font-size: 14px; border-top: 1px dashed #000;">
               <td style="padding-top: 6px;">GRAND TOTAL:</td>
-              <td style="padding-top: 6px; text-align: right;">${billData.currencySymbol || '₹'}${Number(billData.grandTotal).toFixed(2)}</td>
+              <td style="padding-top: 6px; text-align: right;">${billData.currencySymbol || ''}${Number(billData.grandTotal).toFixed(2)}</td>
             </tr>
           </table>
 
@@ -1895,7 +2046,7 @@ export default function OrdersPage() {
       cgstRate,
       sgstRate,
       serviceChargeRate,
-      currencySymbol: systemSettings?.billing?.currencySymbol || '₹'
+      currencySymbol: systemSettings?.billing?.currencySymbol || ''
     };
 
     handleThermalPrintDirect(billData);
@@ -2523,9 +2674,7 @@ export default function OrdersPage() {
                                       className="w-full mt-2 py-1 px-2 bg-slate-50 hover:bg-orange-500/10 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[10px] font-black text-slate-800 dark:text-white flex justify-between items-center cursor-pointer"
                                     >
                                       <span>Price</span>
-                                      <span className="text-[#ff6b00]">
-                                        ₹{parseFloat(item.price || 0).toFixed(0)}
-                                      </span>
+                                      <span className="text-[#ff6b00]">{formatCurrency(item.price, 0)}</span>
                                       {qtyInCart > 0 && (
                                         <span className="px-1 py-0.5 rounded bg-orange-500 text-white text-[8px] font-bold">
                                           {qtyInCart}
@@ -2896,7 +3045,7 @@ export default function OrdersPage() {
                         </div>
                       </div>
 
-                      <div className="flex-1 flex flex-col h-full justify-between border border-slate-200/60 dark:border-white/5 rounded-2xl p-5 bg-white dark:bg-white/[0.01]">
+                      <div className="flex-1 flex flex-col h-full justify-between border border-slate-200/60 dark:border-white/5 rounded-2xl p-5 bg-white dark:bg-white/[0.01] overflow-y-auto">
                         <div className="space-y-4">
                           <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-white/30">
                             Checkout Settings
@@ -2925,10 +3074,56 @@ export default function OrdersPage() {
                               </div>
                             </div>
                           )}
+
+                          {checkoutOrder && selectedPaymentMode === 'UPI' && (
+                            <div className="p-4 bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-2xl space-y-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <div>
+                                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                    Demo Razorpay UPI QR
+                                  </p>
+                                  <p className="text-xs font-extrabold text-slate-800 dark:text-white">
+                                    INV-{checkoutOrder.id} · {formatCurrency(billingTotals.grandTotal)}
+                                  </p>
+                                </div>
+                                <span
+                                  className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                    upiPaymentState === 'SUCCESS'
+                                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                                      : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                                  }`}
+                                >
+                                  {upiPaymentState === 'SUCCESS' ? 'Payment successful' : 'Waiting for scan'}
+                                </span>
+                              </div>
+
+                              <div className="flex flex-col sm:flex-row items-center gap-4">
+                                <div className="p-2.5 bg-white rounded-2xl border border-slate-200 shadow-sm flex-shrink-0">
+                                  <DemoQrBox value={demoUpiQrPayload} size={124} />
+                                </div>
+
+                                <div className="flex-1 space-y-2.5 w-full">
+                                  <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 leading-relaxed">
+                                    Demo Razorpay QR generated for this invoice. After scan completion, it shows Payment successful and auto-settles.
+                                  </p>
+                                  <button
+                                    type="button"
+                                    disabled={upiPaymentState === 'SUCCESS'}
+                                    onClick={() => handleDemoUpiPaymentSuccess(checkoutOrder.id)}
+                                    className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition cursor-pointer"
+                                  >
+                                    {upiPaymentState === 'SUCCESS'
+                                      ? 'Payment successful - Settling...'
+                                      : 'Simulate Scan & Pay'}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         {checkoutOrder ? (
-                          <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-white/5">
+                          <div className="space-y-4 pt-4 mt-4 border-t border-slate-100 dark:border-white/5">
                             <div className="flex flex-col sm:flex-row gap-3">
                               <button
                                 type="button"
@@ -3110,7 +3305,7 @@ export default function OrdersPage() {
                   onClick={() => {
                     const encodedData = encodeEBillPayload(eBillModalData);
                     const eBillUrl = `${window.location.origin}/#/ebill?data=${encodedData}`;
-                    const msg = `*${eBillModalData.hotelName} - Digital E-Bill*\n\nInvoice: ${eBillModalData.invoiceId}\nTable: ${eBillModalData.tableName}\nTotal Paid: *₹${Number(eBillModalData.grandTotal || 0).toFixed(2)}*\n\nView and download your E-Bill:\n${eBillUrl}\n\nThank you for dining with us!`;
+                    const msg = `*${eBillModalData.hotelName} - Digital E-Bill*\n\nInvoice: ${eBillModalData.invoiceId}\nTable: ${eBillModalData.tableName}\nTotal Paid: *${formatCurrency(eBillModalData.grandTotal)}*\n\nView and download your E-Bill:\n${eBillUrl}\n\nThank you for dining with us!`;
                     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
                   }}
                   className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer"
@@ -3127,7 +3322,7 @@ export default function OrdersPage() {
                       cgstRate,
                       sgstRate,
                       serviceChargeRate,
-                      currencySymbol: systemSettings?.billing?.currencySymbol || '₹'
+                      currencySymbol: systemSettings?.billing?.currencySymbol || ''
                     })
                   }
                   className="px-5 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer"
