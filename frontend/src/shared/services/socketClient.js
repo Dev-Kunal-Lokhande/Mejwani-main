@@ -1,12 +1,14 @@
 import { io } from 'socket.io-client';
 import { BACKEND_BASE } from './apiBase';
 
+const isBrowser = typeof window !== 'undefined';
 const isLocalHost =
-  typeof window !== 'undefined' &&
-  ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  isBrowser && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+const hasExplicitSocketUrl = Boolean(import.meta.env?.VITE_SOCKET_URL);
 
 // Local development uses port 9001 when BACKEND_BASE has a port;
-// production/hosted URLs use VITE_SOCKET_URL if configured, otherwise BACKEND_BASE.
+// hosted URLs use VITE_SOCKET_URL if configured, otherwise BACKEND_BASE.
 const SOCKET_URL =
   import.meta.env?.VITE_SOCKET_URL ||
   (isLocalHost ? BACKEND_BASE.replace(/:(\d+)$/, ':9001') : BACKEND_BASE);
@@ -25,7 +27,9 @@ const token = getAuthToken();
 
 const socket = io(SOCKET_URL, {
   transports: ['polling', 'websocket'],
-  reconnectionAttempts: Infinity,
+  reconnection: isLocalHost || hasExplicitSocketUrl,
+  reconnectionAttempts: isLocalHost || hasExplicitSocketUrl ? Infinity : 0,
+  reconnectionDelay: 3000,
   auth: token ? { token } : undefined,
 });
 
@@ -60,6 +64,12 @@ socket.on('connect', () => {
 });
 
 socket.on('connect_error', (error) => {
+  const msg = String(error?.message || '');
+  if (!isLocalHost && !hasExplicitSocketUrl && (msg.includes('403') || msg.includes('xhr poll error'))) {
+    socket.io.opts.reconnection = false;
+    socket.disconnect();
+    return;
+  }
   console.log('[SOCKET] Connection error:', error);
 });
 
