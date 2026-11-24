@@ -6,7 +6,7 @@ import org.springframework.context.SmartLifecycle;
 public class SocketIOServerRunner implements SmartLifecycle {
 
     private final SocketIOServer server;
-    private boolean running = false;
+    private volatile boolean running = false;
 
     public SocketIOServerRunner(SocketIOServer server) {
         this.server = server;
@@ -14,10 +14,15 @@ public class SocketIOServerRunner implements SmartLifecycle {
 
     @Override
     public void start() {
+        if (running) {
+            return;
+        }
         try {
             server.start();
             running = true;
-            System.out.println("[SOCKET.IO] Server started on port " + server.getConfiguration().getPort() + server.getConfiguration().getContext());
+            System.out.println("[SOCKET.IO] Server started on port "
+                    + server.getConfiguration().getPort()
+                    + server.getConfiguration().getContext());
         } catch (Exception e) {
             running = false;
             System.err.println("[SOCKET.IO] Failed to start server: " + e.getMessage());
@@ -26,8 +31,14 @@ public class SocketIOServerRunner implements SmartLifecycle {
 
     @Override
     public void stop() {
+        if (!running) {
+            return;
+        }
         try {
             server.stop();
+            System.out.println("[SOCKET.IO] Server stopped.");
+        } catch (Exception e) {
+            System.err.println("[SOCKET.IO] Failed to stop server: " + e.getMessage());
         } finally {
             running = false;
         }

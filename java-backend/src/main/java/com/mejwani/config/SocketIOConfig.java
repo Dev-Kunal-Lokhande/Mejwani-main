@@ -1,5 +1,6 @@
 package com.mejwani.config;
 
+import com.corundumstudio.socketio.AuthorizationResult;
 import com.corundumstudio.socketio.Configuration;
 import com.corundumstudio.socketio.SocketIOServer;
 import com.corundumstudio.socketio.listener.ConnectListener;
@@ -10,9 +11,6 @@ import org.springframework.context.annotation.Bean;
 @org.springframework.context.annotation.Configuration
 public class SocketIOConfig {
 
-    @Value("${frontend.url:http://localhost:5173}")
-    private String frontendUrl;
-
     @Value("${socketio.port:9001}")
     private int socketPort;
 
@@ -22,7 +20,10 @@ public class SocketIOConfig {
         config.setHostname("0.0.0.0");
         config.setPort(socketPort);
         config.setContext("/socket.io");
-        config.setOrigin(frontendUrl);
+
+        // Render व Localhost दोन्ही origins allow करण्यासाठी
+        config.setOrigin(null);
+        config.setAuthorizationListener(data -> AuthorizationResult.SUCCESSFUL_AUTHORIZATION);
 
         SocketIOServer server = new SocketIOServer(config);
 
@@ -34,7 +35,6 @@ public class SocketIOConfig {
             System.out.println("[SOCKET.IO] Client disconnected: " + client.getSessionId());
         });
 
-        // Join hotel room
         server.addEventListener("join-hotel-room", String.class, (client, data, ackSender) -> {
             client.joinRoom("hotel-" + data);
             System.out.println("[SOCKET.IO] Client joined room: hotel-" + data);
