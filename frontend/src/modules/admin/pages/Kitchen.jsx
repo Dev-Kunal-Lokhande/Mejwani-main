@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Clock,
   CheckCircle2,
@@ -30,14 +30,11 @@ const parseTimestampToDate = (rawValue) => {
   const str = String(rawValue).trim();
   if (!str) return null;
 
-  // If ISO string already has Z or +/-HH:mm offset, parse directly
   if (/([zZ]|[+-]\d{2}:?\d{2})$/.test(str)) {
     const d = new Date(str);
     return Number.isNaN(d.getTime()) ? null : d;
   }
 
-  // If SQL/ISO datetime string has no timezone (e.g. "2026-11-22 17:51:00" or "2026-11-22T17:51:00"),
-  // normalize space to 'T' and append 'Z' so UTC is interpreted consistently
   const normalized = str.includes(' ') ? str.replace(' ', 'T') : str;
   const utcCandidate = new Date(
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(normalized) ? `${normalized}Z` : normalized
@@ -68,6 +65,13 @@ const formatTableLabel = (tableNo) => {
   return clean || 'N/A';
 };
 
+const normalizeQueueStatus = (rawStatus) => {
+  const st = String(rawStatus || '').toLowerCase().trim();
+  if (['cooking', 'preparing'].includes(st)) return 'cooking';
+  if (['ready', 'completed', 'dispatched', 'served'].includes(st)) return 'ready';
+  return 'pending';
+};
+
 export default function AdminKitchen() {
   const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -77,12 +81,23 @@ export default function AdminKitchen() {
   const [toast, setToast] = useState(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  const optimisticOverridesRef = useRef({});
+  const updatingKeysRef = useRef({});
+  const fetchSeqRef = useRef(0);
+  const toastTimerRef = useRef(null);
 
-  // Live 1-second tick so elapsed minutes stay accurate
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, type });
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 2200);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     const tickInterval = setInterval(() => {
       setNowTick(Date.now());
@@ -90,12 +105,19 @@ export default function AdminKitchen() {
     return () => clearInterval(tickInterval);
   }, []);
 
-  const fetchQueue = async (isManual = false) => {
+  const fetchQueue = useCallback(async (isManual = false) => {
+    // Skip background polling while a click update is in flight so UI feels instant & never lags
+    if (!isManual && Object.keys(updatingKeysRef.current).length > 0) {
+      return;
+    }
+
+    const reqSeq = ++fetchSeqRef.current;
     if (isManual) setRefreshing(true);
+
     try {
       const token = localStorage.getItem('mejwani_admin_jwt');
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
       const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
       const hParam = hotelId ? `?hotelId=${hotelId}` : '';
 
@@ -104,33 +126,70 @@ export default function AdminKitchen() {
           .get(`${API_BASE}/orders/kitchen-queue${hParam}`, { headers: authHeader })
           .catch(() => ({ data: { success: false } })),
         axios
-          .get(`${API_BASE}/parcels?date=today`, { headers: authHeader })
+          .get(`${API_BASE}/parcels?date=today${hotelId ? `&hotelId=${hotelId}` : ''}`, {
+            headers: authHeader
+          })
           .catch(() => ({ data: { success: false } }))
       ]);
 
+      if (reqSeq !== fetchSeqRef.current) return;
+
       let allQueue = [];
+      const seenParcelRefs = new Set();
 
       if (ordersRes.data && ordersRes.data.success) {
-        const filteredOrders = ordersRes.data.data.filter((order) => {
-          return (
-            Array.isArray(order.items) &&
-            order.items.length > 0 &&
-            order.status &&
-            ['pending', 'cooking', 'preparing', 'new', 'sent_to_kitchen'].includes(
-              order.status.toLowerCase()
-            ) &&
-            order.type !== 'service-request' &&
-            order.category !== 'service-request' &&
-            order.requestType !== 'service-request'
-          );
-        });
+        const filteredOrders = (ordersRes.data.data || [])
+          .filter((order) => {
+            return (
+              Array.isArray(order.items) &&
+              order.items.length > 0 &&
+              order.status &&
+              ['pending', 'cooking', 'preparing', 'new', 'sent_to_kitchen'].includes(
+                order.status.toLowerCase()
+              ) &&
+              order.type !== 'service-request' &&
+              order.category !== 'service-request' &&
+              order.requestType !== 'service-request'
+            );
+          })
+          .map((order) => {
+            const rawTable = String(order.tableNo || order.table_name || '').trim();
+            const isOrderParcel =
+              Boolean(order.isParcel || order.is_parcel) || /^parcel/i.test(rawTable);
+            if (isOrderParcel) {
+              seenParcelRefs.add(String(order.id));
+              if (order.parcel_id) seenParcelRefs.add(String(order.parcel_id));
+              seenParcelRefs.add(rawTable.toLowerCase());
+            }
+            return {
+              ...order,
+              queueKey: `order-${order.id}`,
+              status: normalizeQueueStatus(order.status),
+              isParcelOrderTable: isOrderParcel
+            };
+          });
+
         allQueue = [...allQueue, ...filteredOrders];
       }
 
       if (parcelsRes.data && parcelsRes.data.success) {
-        const parcelData = parcelsRes.data.data.filter((p) =>
-          ['pending', 'pending_kitchen', 'preparing'].includes(p.status)
-        );
+        const parcelData = (parcelsRes.data.data || []).filter((p) => {
+          const st = String(p.status || '').toLowerCase();
+          if (!['pending', 'pending_kitchen', 'preparing', 'cooking'].includes(st)) return false;
+
+          const pIdStr = String(p.id || p._id || '');
+          const pCodeStr = String(p.parcel_id || '');
+          const pLabel = `parcel ${pCodeStr || pIdStr}`.toLowerCase();
+          if (
+            seenParcelRefs.has(pIdStr) ||
+            (pCodeStr && seenParcelRefs.has(pCodeStr)) ||
+            seenParcelRefs.has(pLabel)
+          ) {
+            return false;
+          }
+          return true;
+        });
+
         const mappedParcels = parcelData.map((p) => {
           let pItems = [];
           if (typeof p.items === 'string') {
@@ -140,23 +199,40 @@ export default function AdminKitchen() {
           } else {
             pItems = p.items || [];
           }
+          const rawId = p.id || p._id;
           return {
-            _id: p.id || p._id,
-            id: p.id || p._id,
-            tableNo: 'PARCEL',
+            _id: rawId,
+            id: rawId,
+            queueKey: `parcel-${rawId}`,
+            tableNo: p.parcel_id ? `PARCEL ${p.parcel_id}` : 'PARCEL',
             captain: p.customer_name || 'Walk-in',
-            status: p.status === 'preparing' ? 'cooking' : 'pending',
+            status: normalizeQueueStatus(p.status),
             isParcel: true,
             parcel_id: p.parcel_id,
             createdAt: p.created_at || p.createdAt || new Date().toISOString(),
             items: pItems
           };
         });
+
         allQueue = [...allQueue, ...mappedParcels];
       }
 
       if (ordersRes.data && ordersRes.data.success) {
-        setQueue(allQueue);
+        const now = Date.now();
+        const reconciledQueue = allQueue
+          .map((item) => {
+            const override = optimisticOverridesRef.current[item.queueKey];
+            if (override && override.expiresAt > now) {
+              return { ...item, status: override.status };
+            }
+            if (override && override.expiresAt <= now) {
+              delete optimisticOverridesRef.current[item.queueKey];
+            }
+            return item;
+          })
+          .filter((item) => item.status !== 'ready');
+
+        setQueue(reconciledQueue);
         setError(null);
       } else {
         setError('Failed to fetch the kitchen preparation queue.');
@@ -168,7 +244,7 @@ export default function AdminKitchen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchQueue();
@@ -176,10 +252,24 @@ export default function AdminKitchen() {
       fetchQueue();
     }, 7000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchQueue]);
 
-  const handleUpdateStatus = async (orderId, currentStatus, tableNo, isParcel = false) => {
-    const isPending = ['new', 'pending', 'sent_to_kitchen'].includes((currentStatus || '').toLowerCase());
+  // Instant click processing: UI & events run immediately; API sync happens in background
+  const handleUpdateStatus = (order) => {
+    const {
+      id: orderId,
+      queueKey,
+      status: currentStatus,
+      tableNo,
+      isParcel = false,
+      isParcelOrderTable = false
+    } = order;
+
+    if (updatingKeysRef.current[queueKey]) return;
+    updatingKeysRef.current[queueKey] = true;
+
+    const normalizedCurrent = normalizeQueueStatus(currentStatus);
+    const isPending = normalizedCurrent === 'pending';
     const uiNextStatus = isPending ? 'cooking' : 'ready';
     const apiNextStatus = isParcel
       ? isPending
@@ -189,69 +279,84 @@ export default function AdminKitchen() {
       ? 'PREPARING'
       : 'READY';
 
-    const url = isParcel ? `${API_BASE}/parcels/${orderId}` : `${API_BASE}/orders/${orderId}/status`;
+    const token = localStorage.getItem('mejwani_admin_jwt');
+    const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
+    const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
+    const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+    const hParam = hotelId ? `?hotelId=${hotelId}` : '';
+
+    const url = isParcel
+      ? `${API_BASE}/parcels/${orderId}${hParam}`
+      : `${API_BASE}/orders/${orderId}/status${hParam}`;
     const cleanTable = formatTableLabel(tableNo);
+    const parcelMode = Boolean(isParcel || isParcelOrderTable);
 
-    try {
-      setQueue((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: uiNextStatus } : o)));
+    // 1. Lock & update UI immediately on click
+    optimisticOverridesRef.current[queueKey] = {
+      status: uiNextStatus,
+      expiresAt: Date.now() + 15000
+    };
 
-      const response = isParcel
-        ? await axios.patch(url, { status: apiNextStatus })
-        : await axios.put(url, { status: apiNextStatus });
+    if (uiNextStatus === 'ready') {
+      setQueue((prev) => prev.filter((o) => o.queueKey !== queueKey));
+      const displayTable = parcelMode
+        ? order?.captain && order.captain !== 'Walk-in'
+          ? order.captain
+          : order?.parcel_id
+          ? `Parcel ${order.parcel_id}`
+          : cleanTable
+        : cleanTable;
 
-      if (response.data && response.data.success) {
-        if (uiNextStatus === 'ready') {
-          const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-          const hotelId = adminUser.hotel_id || localStorage.getItem('mejwani_hotel_id') || '';
-          const currentOrder = queue.find((o) => o.id === orderId);
+      const readyPayload = {
+        hotelId,
+        orderId,
+        isParcel: parcelMode,
+        tableName: displayTable,
+        kotNumber: order?.kot_number || order?.parcel_id || `ORD-${orderId}`,
+        status: 'READY'
+      };
 
-          const displayTable = isParcel
-            ? currentOrder?.captain && currentOrder.captain !== 'Walk-in'
-              ? currentOrder.captain
-              : `Parcel ${currentOrder?.parcel_id || orderId}`
-            : cleanTable;
+      socket.emit('order-ready', readyPayload);
+      try {
+        const bc = new BroadcastChannel('mejwani_realtime_alerts');
+        bc.postMessage({ type: 'ORDER_READY', payload: readyPayload });
+        bc.close();
+      } catch (e) {}
 
-          const readyPayload = {
-            hotelId,
-            orderId,
-            isParcel,
-            tableName: displayTable,
-            kotNumber: currentOrder?.kot_number || currentOrder?.parcel_id || `ORD-${orderId}`,
-            status: 'READY'
-          };
-
-          socket.emit('order-ready', readyPayload);
-
-          try {
-            const bc = new BroadcastChannel('mejwani_realtime_alerts');
-            bc.postMessage({ type: 'ORDER_READY', payload: readyPayload });
-            bc.close();
-          } catch (e) {}
-
-          showToast(
-            `${isParcel ? displayTable : 'Table ' + displayTable} order is marked READY and dispatched!`
-          );
-          setQueue((prev) => prev.filter((o) => o.id !== orderId));
-        } else {
-          showToast(`${isParcel ? 'Parcel' : 'Table ' + cleanTable} order is now COOKING!`);
-        }
-      } else {
-        showToast('Error updating food preparation status.', 'error');
-        fetchQueue();
-      }
-    } catch (err) {
-      console.error('Error updating order status:', err);
-      showToast('Action failed. Make sure backend is running.', 'error');
-      fetchQueue();
+      showToast(`${parcelMode ? displayTable : 'Table ' + displayTable} order marked READY!`);
+    } else {
+      setQueue((prev) =>
+        prev.map((o) => (o.queueKey === queueKey ? { ...o, status: uiNextStatus } : o))
+      );
+      showToast(`${parcelMode ? cleanTable : 'Table ' + cleanTable} order is now COOKING!`);
     }
+
+    // 2. Sync with backend immediately in background
+    const requestPromise = isParcel
+      ? axios.patch(url, { status: apiNextStatus }, { headers: authHeader })
+      : axios.put(url, { status: apiNextStatus }, { headers: authHeader });
+
+    requestPromise
+      .then((response) => {
+        if (!response.data || !response.data.success) {
+          delete optimisticOverridesRef.current[queueKey];
+          showToast('Error updating food preparation status.', 'error');
+          fetchQueue(true);
+        }
+      })
+      .catch((err) => {
+        console.error('Error updating order status:', err);
+        delete optimisticOverridesRef.current[queueKey];
+        showToast('Action failed. Make sure backend is running.', 'error');
+        fetchQueue(true);
+      })
+      .finally(() => {
+        delete updatingKeysRef.current[queueKey];
+      });
   };
 
-  const pendingCount = queue.filter((o) =>
-    ['pending', 'new', 'sent_to_kitchen'].includes((o.status || '').toLowerCase())
-  ).length;
-  const cookingCount = queue.filter((o) =>
-    ['cooking', 'preparing'].includes((o.status || '').toLowerCase())
-  ).length;
+  const pendingCount = queue.filter((o) => normalizeQueueStatus(o.status) === 'pending').length;
+  const cookingCount = queue.filter((o) => normalizeQueueStatus(o.status) === 'cooking').length;
 
   const formatTime = (rawDate) => {
     const parsed = parseTimestampToDate(rawDate);
@@ -372,14 +477,15 @@ export default function AdminKitchen() {
               const rawTimestamp = getOrderTimestamp(order);
               const elapsed = getElapsedMins(rawTimestamp);
               const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
-              const isExpanded = expandedCard === order.id;
-              const isCooking = ['cooking', 'preparing'].includes((order.status || '').toLowerCase());
+              const isExpanded = expandedCard === order.queueKey;
+              const isCooking = normalizeQueueStatus(order.status) === 'cooking';
               const cleanTable = formatTableLabel(order.tableNo);
+              const parcelBadge = Boolean(order.isParcel || order.isParcelOrderTable);
 
               return (
                 <div
-                  key={order.id}
-                  className={`bg-white dark:bg-[#0d0d0d] border rounded-[2.5rem] p-6 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden
+                  key={order.queueKey}
+                  className={`bg-white dark:bg-[#0d0d0d] border rounded-[2.5rem] p-6 shadow-sm hover:shadow-xl transition-all duration-150 flex flex-col justify-between group relative overflow-hidden
                     ${isCooking ? 'border-orange-500/30 dark:border-orange-500/20' : 'border-slate-200 dark:border-white/5'}
                   `}
                 >
@@ -391,7 +497,7 @@ export default function AdminKitchen() {
                     <div className="flex items-start justify-between mb-4">
                       <div>
                         <h4 className="text-2xl font-black text-slate-900 dark:text-white uppercase">
-                          {order.isParcel ? 'PARCEL' : `TABLE ${cleanTable}`}
+                          {parcelBadge ? cleanTable : `TABLE ${cleanTable}`}
                         </h4>
                         <span className="inline-block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">
                           {totalItems} {totalItems === 1 ? 'ITEM' : 'ITEMS'}
@@ -412,7 +518,7 @@ export default function AdminKitchen() {
                       <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-white/60">
                         <User className="w-3.5 h-3.5 text-orange-500" />
                         <span>
-                          {order.isParcel ? 'Customer' : 'Captain'}:{' '}
+                          {parcelBadge ? 'Customer' : 'Captain'}:{' '}
                           <strong className="text-slate-900 dark:text-white font-black">{order.captain}</strong>
                         </span>
                       </div>
@@ -430,7 +536,7 @@ export default function AdminKitchen() {
                     <div className="mb-6">
                       <button
                         type="button"
-                        onClick={() => setExpandedCard(isExpanded ? null : order.id)}
+                        onClick={() => setExpandedCard(isExpanded ? null : order.queueKey)}
                         className="w-full py-2 bg-slate-50 dark:bg-white/2 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-orange-500 transition-colors flex items-center justify-center gap-2 cursor-pointer border border-slate-100 dark:border-white/5"
                       >
                         {isExpanded ? (
@@ -481,7 +587,7 @@ export default function AdminKitchen() {
                         />
                         <span
                           className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full ${
-                            order.isParcel
+                            parcelBadge
                               ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20'
                               : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                           }`}
@@ -500,8 +606,8 @@ export default function AdminKitchen() {
 
                     <button
                       type="button"
-                      onClick={() => handleUpdateStatus(order.id, order.status, order.tableNo, order.isParcel)}
-                      className={`w-full py-4 rounded-xl flex items-center justify-center gap-2 font-extrabold text-xs uppercase tracking-widest transition-all ${
+                      onClick={() => handleUpdateStatus(order)}
+                      className={`w-full py-4 rounded-xl flex items-center justify-center gap-2 font-extrabold text-xs uppercase tracking-widest transition-all active:scale-[0.98] cursor-pointer ${
                         isCooking
                           ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25'
                           : 'bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-500/25'
