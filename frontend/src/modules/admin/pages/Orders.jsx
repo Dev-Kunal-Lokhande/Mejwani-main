@@ -37,6 +37,27 @@ const isLocalNetworkHost = () => {
   );
 };
 
+const safeParseJson = async (response) => {
+  if (!response) return {};
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { success: false, message: text.slice(0, 120) };
+  }
+};
+
+const encodeEBillPayload = (obj) => {
+  const jsonStr = JSON.stringify(obj);
+  const bytes = new TextEncoder().encode(jsonStr);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return encodeURIComponent(window.btoa(binary));
+};
+
 const showPrinterErrorToast = (message, toastId, navigate) => {
   toast.error(
     (t) => (
@@ -51,7 +72,7 @@ const showPrinterErrorToast = (message, toastId, navigate) => {
           }
         }}
       >
-        <span className="font-bold text-sm">❌ {message}</span>
+        <span className="font-bold text-sm">{message}</span>
         <span className="text-[10px] underline opacity-90 font-medium">Click here to configure printer settings.</span>
       </div>
     ),
@@ -130,9 +151,9 @@ export default function OrdersPage() {
   const [selectedPaymentMode, setSelectedPaymentMode] = useState('CASH');
 
   const formatCurrency = (value = 0, decimals = 2) => formatCurrencyWithSettings(value, systemSettings, decimals);
-  const cgstRate = Number(systemSettings.billing.cgst) || 0;
-  const sgstRate = Number(systemSettings.billing.sgst) || 0;
-  const serviceChargeRate = Number(systemSettings.billing.serviceCharge) || 0;
+  const cgstRate = Number(systemSettings?.billing?.cgst) || 0;
+  const sgstRate = Number(systemSettings?.billing?.sgst) || 0;
+  const serviceChargeRate = Number(systemSettings?.billing?.serviceCharge) || 0;
 
   const findActiveOrderForTable = useCallback(
     (table) => {
@@ -289,15 +310,15 @@ export default function OrdersPage() {
     if (!toastedJobsRef.current.has(jobIdStr)) {
       toastedJobsRef.current.add(jobIdStr);
       if (jobType === 'KOT') {
-        toast.success(`✅ KOT printed successfully for ${tableName || 'Table'}.`, {
+        toast.success(`KOT printed successfully for ${tableName || 'Table'}.`, {
           id: `kot-success-${jobId}`,
           style: { borderRadius: '10px', background: '#333', color: '#fff' }
         });
       } else {
         const tName = tableName || 'Table';
         const message = tName.startsWith('Parcel')
-          ? `✅ Bill printed successfully for ${tName}.`
-          : `✅ Bill printed successfully for Table ${tName}.`;
+          ? `Bill printed successfully for ${tName}.`
+          : `Bill printed successfully for Table ${tName}.`;
         toast.success(message, {
           id: `bill-success-${jobId}`,
           style: { borderRadius: '10px', background: '#333', color: '#fff' }
@@ -305,11 +326,6 @@ export default function OrdersPage() {
       }
     }
   }, []);
-
-  const isFetchingTablesRef = useRef(false);
-  const isFetchingOrdersRef = useRef(false);
-  const isFetchingSalesRef = useRef(false);
-  const isFetchingParcelsRef = useRef(false);
 
   const [selectedTable, setSelectedTable] = useState(null);
   const [isAddingItems, setIsAddingItems] = useState(false);
@@ -332,7 +348,7 @@ export default function OrdersPage() {
     const fetchPrinterConfig = async () => {
       try {
         const resp = await authorizedFetch(`${API_BASE}/print-agent/status`);
-        const data = await resp.json();
+        const data = await safeParseJson(resp);
         if (resp.ok && data && data.success && data.agent) {
           const config =
             typeof data.agent.printer_config === 'string'
@@ -401,8 +417,8 @@ export default function OrdersPage() {
       const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
       const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
       const res = await authorizedFetch(`${API_BASE}/menu${hotelParam}`);
-      const data = await res.json();
-      if (data.success) {
+      const data = await safeParseJson(res);
+      if (res.ok && data.success) {
         setCachedMenu(data.data);
         setMenuItems(data.data || []);
       }
@@ -555,6 +571,169 @@ export default function OrdersPage() {
     );
   };
 
+  const fetchTables = useCallback(async () => {
+    try {
+      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
+      const tablesRes = await authorizedFetch(
+        `${API_BASE}/tables${hotelParam}${hotelParam ? '&' : '?'}t=${Date.now()}`
+      );
+
+      const tablesData = await safeParseJson(tablesRes);
+      if (tablesRes.ok && tablesData.success) {
+        const fetchedTables = (tablesData.data || [])
+          .filter((t) => String(t.section_name ?? t.sectionName ?? '').toUpperCase() !== 'PARCEL')
+          .map((t) =>
+            t.id != null && recentlySettledTableIdsRef.current.has(String(t.id))
+              ? {
+                  ...t,
+                  status: 'available',
+                  occupied_at: null,
+                  currentOrder: null,
+                  current_order: null,
+                  current_amount: 0,
+                  order_total: 0
+                }
+              : t
+          );
+        setTables(fetchedTables);
+      }
+    } catch (err) {
+      console.error('[Orders] Fetch tables issue:', err);
+    }
+  }, []);
+
+  const fetchOrders = useCallback(async () => {
+    try {
+      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
+      const ordersRes = await authorizedFetch(
+        `${API_BASE}/orders${hotelParam}${hotelParam ? '&' : '?'}t=${Date.now()}`
+      );
+      const ordersData = await safeParseJson(ordersRes);
+      if (ordersRes.ok && ordersData.success) {
+        const rawList = Array.isArray(ordersData.data)
+          ? ordersData.data
+          : Array.isArray(ordersData.data?.orders)
+          ? ordersData.data.orders
+          : [];
+        const normalizedList = rawList.map((o) =>
+          o?.id != null && recentlySettledOrderIdsRef.current.has(String(o.id))
+            ? { ...o, status: 'COMPLETED' }
+            : o
+        );
+        setOrders(normalizedList);
+      }
+    } catch (err) {
+      console.error('[Orders] Fetch orders issue:', err);
+    }
+  }, []);
+
+  const fetchSales = useCallback(async () => {
+    try {
+      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
+      await authorizedFetch(`${API_BASE}/orders/today/sales${hotelParam}${hotelParam ? '&' : '?'}t=${Date.now()}`);
+    } catch (err) {
+      console.error('[Orders] Fetch sales issue:', err);
+    }
+  }, []);
+
+  const fetchParcels = useCallback(async () => {
+    try {
+      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
+      const todayKey = new Date().toISOString().split('T')[0];
+      await authorizedFetch(
+        `${API_BASE}/parcels?date=${todayKey}${hotelId ? '&hotelId=' + hotelId : ''}&t=${Date.now()}`
+      );
+    } catch (err) {
+      console.error('[Orders] Fetch parcels issue:', err);
+    }
+  }, []);
+
+  const fetchCaptainRequests = useCallback(async () => {
+    try {
+      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
+      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
+      const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
+      const res = await authorizedFetch(
+        `${API_BASE}/customer/active-captain-requests${hotelParam}${hotelParam ? '&' : '?'}t=${Date.now()}`
+      );
+      const data = await safeParseJson(res);
+      if (res.ok && data.success) {
+        setCaptainRequests(data.data || []);
+      }
+    } catch (err) {
+      console.error('[Orders] Fetch captain requests issue:', err);
+    }
+  }, []);
+
+  const syncOperationalState = useCallback(async () => {
+    try {
+      await Promise.all([
+        fetchTables(),
+        fetchOrders(),
+        fetchSales(),
+        fetchParcels(),
+        fetchCaptainRequests()
+      ]);
+    } catch (err) {
+      console.error('[Orders] Real-time sync issue:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchTables, fetchOrders, fetchSales, fetchParcels, fetchCaptainRequests]);
+
+  const syncTableState = useCallback(async () => {
+    try {
+      await Promise.all([fetchTables(), fetchOrders()]);
+    } catch (err) {
+      console.error('[Orders] Real-time table status sync issue:', err);
+    }
+  }, [fetchTables, fetchOrders]);
+
+  const [checkoutOrder, setCheckoutOrder] = useState(null);
+  const [eBillModalData, setEBillModalData] = useState(null);
+  const [menuViewMode, setMenuViewMode] = useState('table');
+
+  const selectedTableLive = useMemo(() => {
+    if (!selectedTable) return null;
+    return tables.find((t) => String(t.id) === String(selectedTable.id)) || selectedTable;
+  }, [tables, selectedTable]);
+
+  const activeOrderForSelectedTable = useMemo(() => {
+    if (!selectedTableLive) return null;
+    return getTableFallbackOrder(selectedTableLive);
+  }, [selectedTableLive, getTableFallbackOrder]);
+
+  const billingTotals = useMemo(() => {
+    if (!checkoutOrder) {
+      return { subtotal: 0, cgst: 0, sgst: 0, serviceCharge: 0, grandTotal: 0 };
+    }
+
+    const itemsTotal = (checkoutOrder.items || []).reduce(
+      (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0),
+      0
+    );
+
+    const subtotal = Number(checkoutOrder.subtotal) > 0 ? Number(checkoutOrder.subtotal) : itemsTotal;
+    const cgst = Number(checkoutOrder.cgst) > 0 ? Number(checkoutOrder.cgst) : (subtotal * cgstRate) / 100;
+    const sgst = Number(checkoutOrder.sgst) > 0 ? Number(checkoutOrder.sgst) : (subtotal * sgstRate) / 100;
+    const serviceCharge = (subtotal * serviceChargeRate) / 100;
+
+    const calculatedGrandTotal = subtotal + cgst + sgst + serviceCharge;
+    const grandTotal =
+      Number(checkoutOrder.grand_total) > 0 && Number(checkoutOrder.cgst) > 0
+        ? Number(checkoutOrder.grand_total)
+        : calculatedGrandTotal;
+
+    return { subtotal, cgst, sgst, serviceCharge, grandTotal };
+  }, [checkoutOrder, cgstRate, sgstRate, serviceChargeRate]);
+
   const handleSubmitAdditionalItems = async (options = {}) => {
     if (!activeOrderForSelectedTable || !selectedTableLive) return;
 
@@ -639,24 +818,24 @@ export default function OrdersPage() {
       const orderId = activeOrderForSelectedTable.id;
       const res = await axios.put(`${API_BASE}/orders/${orderId}/append-items${hotelParam}`, payload);
 
-      if (res.data.success) {
-        const updatedOrderData = res.data.data;
+      if (res.data?.success) {
+        const updatedOrderData = res.data.data || {};
         setOrders((prev) =>
           prev.map((o) =>
             o.id === orderId
               ? {
                   ...o,
-                  subtotal: updatedOrderData.subtotal,
-                  cgst: updatedOrderData.cgst,
-                  sgst: updatedOrderData.sgst,
-                  grand_total: updatedOrderData.grand_total,
-                  items: updatedOrderData.items
+                  subtotal: updatedOrderData.subtotal ?? o.subtotal,
+                  cgst: updatedOrderData.cgst ?? o.cgst,
+                  sgst: updatedOrderData.sgst ?? o.sgst,
+                  grand_total: updatedOrderData.grand_total ?? o.grand_total,
+                  items: updatedOrderData.items ?? o.items
                 }
               : o
           )
         );
 
-        toast.success(`✅ Bill updated successfully.`, {
+        toast.success('Bill updated successfully.', {
           style: { borderRadius: '10px', background: '#333', color: '#fff' }
         });
 
@@ -671,11 +850,11 @@ export default function OrdersPage() {
         setMenuCategoryFilter('All');
         setMenuTypeFilter('All');
       } else {
-        throw new Error(res.data.message || 'Failed to update bill');
+        throw new Error(res.data?.message || 'Failed to update bill');
       }
     } catch (err) {
       console.error('[Orders] handleSubmitAdditionalItems failed:', err);
-      toast.error(`❌ Failed to update bill: ${err.message}`, {
+      toast.error(`Failed to update bill: ${err.message}`, {
         style: { borderRadius: '10px', background: '#e11d48', color: '#fff' }
       });
     } finally {
@@ -737,35 +916,38 @@ export default function OrdersPage() {
     setMenuSearchTerm('');
   };
 
-  const handleSelectTableCard = useCallback(async (table) => {
-    if (!table) return;
-    setSelectedTable(table);
-    setIsAddingItems(false);
+  const handleSelectTableCard = useCallback(
+    async (table) => {
+      if (!table) return;
+      setSelectedTable(table);
+      setIsAddingItems(false);
 
-    if (isTableOccupiedOrBusy(table)) {
-      setIsCreatingDirectOrder(false);
-      setAdditionalItems([]);
-      const existingOrder = getTableFallbackOrder(table);
-      setCheckoutOrder(
-        existingOrder || {
-          id: `TBL-${table.id}`,
-          table_id: table.id,
-          table_name: table.table_name,
-          status: 'OCCUPIED',
-          created_at: table.occupied_at || new Date().toISOString(),
-          items: [],
-          subtotal: 0,
-          cgst: 0,
-          sgst: 0,
-          grand_total: 0
-        }
-      );
-      await fetchOrders();
-    } else {
-      setCheckoutOrder(null);
-      openDirectOrder();
-    }
-  }, [isTableOccupiedOrBusy, getTableFallbackOrder]);
+      if (isTableOccupiedOrBusy(table)) {
+        setIsCreatingDirectOrder(false);
+        setAdditionalItems([]);
+        const existingOrder = getTableFallbackOrder(table);
+        setCheckoutOrder(
+          existingOrder || {
+            id: `TBL-${table.id}`,
+            table_id: table.id,
+            table_name: table.table_name,
+            status: 'OCCUPIED',
+            created_at: table.occupied_at || new Date().toISOString(),
+            items: [],
+            subtotal: 0,
+            cgst: 0,
+            sgst: 0,
+            grand_total: 0
+          }
+        );
+        await fetchOrders();
+      } else {
+        setCheckoutOrder(null);
+        openDirectOrder();
+      }
+    },
+    [isTableOccupiedOrBusy, getTableFallbackOrder, fetchOrders]
+  );
 
   const focusAndBlinkTableForBilling = useCallback(
     (tableId, tableName = '') => {
@@ -839,8 +1021,8 @@ export default function OrdersPage() {
         body: JSON.stringify(kotData)
       });
 
-      const printData = await printRes.json();
-      if (!printData.success) {
+      const printData = await safeParseJson(printRes);
+      if (!printRes.ok || !printData.success) {
         if (printData.code === 'PRINTER_NOT_CONFIGURED' || printData.code === 'PRINTER_OFFLINE') {
           showPrinterErrorToast(printData.message, `kot-manual-fail-${order.id}`, navigate);
           return;
@@ -849,7 +1031,7 @@ export default function OrdersPage() {
       }
 
       const jobId = printData.jobId;
-      startAckTimeout(jobId, 'KOT');
+      if (jobId) startAckTimeout(jobId, 'KOT');
 
       let localPrintSuccess = false;
       if (isLocalNetworkHost()) {
@@ -862,7 +1044,7 @@ export default function OrdersPage() {
             body: JSON.stringify({ id: jobId, job_type: 'KOT', payload: kotData }),
             signal: controller.signal
           });
-          const localData = await localResponse.json();
+          const localData = await safeParseJson(localResponse);
           clearTimeout(timeoutId);
           if (localData.success) {
             localPrintSuccess = true;
@@ -879,8 +1061,8 @@ export default function OrdersPage() {
 
       syncOperationalState();
     } catch (err) {
-      console.error(`[Manual-KOT] Failed to print KOT manually:`, err);
-      toast.error(`❌ KOT printing failed: ${err.message}`, {
+      console.error('[Manual-KOT] Failed to print KOT manually:', err);
+      toast.error(`KOT printing failed: ${err.message}`, {
         style: { borderRadius: '10px', background: '#e11d48', color: '#fff' }
       });
     }
@@ -917,22 +1099,26 @@ export default function OrdersPage() {
 
       const res = await axios.post(`${API_BASE}/orders/direct-bill${hotelParam}`, payload);
 
-      if (res.data.success) {
-        const newOrder = res.data.data;
+      if (res.data?.success) {
+        const newOrder = res.data.data || {};
         recentlySettledTableIdsRef.current.delete(String(selectedTable.id));
         if (newOrder?.id != null) {
           recentlySettledOrderIdsRef.current.delete(String(newOrder.id));
         }
 
-        setOrders((prev) => [
-          ...prev,
-          {
-            ...newOrder,
-            table_id: getOrderTableId(newOrder) ?? selectedTable.id,
-            status: 'BILL_PENDING',
-            kotPrinted: true
-          }
-        ]);
+        const fallbackSub = additionalItems.reduce((s, i) => s + Number(i.price || 0) * Number(i.quantity || 0), 0);
+        const orderRecord = {
+          ...newOrder,
+          id: newOrder.id ?? `ORD-${Date.now()}`,
+          table_id: getOrderTableId(newOrder) ?? selectedTable.id,
+          table_name: newOrder.table_name || selectedTable.table_name,
+          items: Array.isArray(newOrder.items) && newOrder.items.length > 0 ? newOrder.items : payload.items,
+          subtotal: Number(newOrder.subtotal) > 0 ? Number(newOrder.subtotal) : fallbackSub,
+          status: 'BILL_PENDING',
+          kotPrinted: true
+        };
+
+        setOrders((prev) => [...prev, orderRecord]);
         setTables((prev) =>
           prev.map((t) => (t.id === selectedTable.id ? { ...t, status: 'bill_pending' } : t))
         );
@@ -943,163 +1129,26 @@ export default function OrdersPage() {
         setMenuCategoryFilter('All');
         setMenuTypeFilter('All');
 
-        toast.success(`✅ Bill created for ${selectedTable.table_name}.`, {
+        toast.success(`Bill created for ${selectedTable.table_name}.`, {
           style: { borderRadius: '10px', background: '#333', color: '#fff' }
         });
 
-        if (options.printKot && newOrder) {
-          const deltaItems = newOrder.deltaItems || newOrder.items || [];
-          triggerManualKOTPrint(newOrder, deltaItems);
+        if (options.printKot && orderRecord) {
+          const deltaItems = newOrder.deltaItems || orderRecord.items || [];
+          triggerManualKOTPrint(orderRecord, deltaItems);
         }
       } else {
-        throw new Error(res.data.message || 'Failed to create bill');
+        throw new Error(res.data?.message || 'Failed to create bill');
       }
     } catch (err) {
       console.error('[Orders] handleCreateDirectOrder failed:', err);
-      toast.error(`❌ ${err.response?.data?.message || err.message}`, {
+      toast.error(err.response?.data?.message || err.message, {
         style: { borderRadius: '10px', background: '#e11d48', color: '#fff' }
       });
     } finally {
       setIsSubmittingDirectOrder(false);
     }
   };
-
-  const fetchTables = useCallback(async () => {
-    isFetchingTablesRef.current = true;
-    try {
-      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
-      const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
-      const tablesRes = await authorizedFetch(
-        `${API_BASE}/tables${hotelParam}${hotelParam ? '&' : '?'}t=${Date.now()}`
-      );
-
-      const tablesData = await tablesRes.json();
-      if (tablesData.success) {
-        const fetchedTables = (tablesData.data || [])
-          .filter((t) => String(t.section_name ?? t.sectionName ?? '').toUpperCase() !== 'PARCEL')
-          .map((t) =>
-            t.id != null && recentlySettledTableIdsRef.current.has(String(t.id))
-              ? {
-                  ...t,
-                  status: 'available',
-                  occupied_at: null,
-                  currentOrder: null,
-                  current_order: null,
-                  current_amount: 0,
-                  order_total: 0
-                }
-              : t
-          );
-        setTables(fetchedTables);
-      }
-    } catch (err) {
-      console.error('[Orders] Fetch tables issue:', err);
-    } finally {
-      isFetchingTablesRef.current = false;
-    }
-  }, []);
-
-  const fetchOrders = useCallback(async () => {
-    isFetchingOrdersRef.current = true;
-    try {
-      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
-      const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
-      const ordersRes = await authorizedFetch(
-        `${API_BASE}/orders${hotelParam}${hotelParam ? '&' : '?'}t=${Date.now()}`
-      );
-      const ordersData = await ordersRes.json();
-      if (ordersData.success) {
-        const rawList = Array.isArray(ordersData.data)
-          ? ordersData.data
-          : Array.isArray(ordersData.data?.orders)
-          ? ordersData.data.orders
-          : [];
-        const normalizedList = rawList.map((o) =>
-          o?.id != null && recentlySettledOrderIdsRef.current.has(String(o.id))
-            ? { ...o, status: 'COMPLETED' }
-            : o
-        );
-        setOrders(normalizedList);
-      }
-    } catch (err) {
-      console.error('[Orders] Fetch orders issue:', err);
-    } finally {
-      isFetchingOrdersRef.current = false;
-    }
-  }, []);
-
-  const fetchSales = useCallback(async () => {
-    isFetchingSalesRef.current = true;
-    try {
-      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
-      const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
-      await authorizedFetch(`${API_BASE}/orders/today/sales${hotelParam}${hotelParam ? '&' : '?'}t=${Date.now()}`);
-    } catch (err) {
-      console.error('[Orders] Fetch sales issue:', err);
-    } finally {
-      isFetchingSalesRef.current = false;
-    }
-  }, []);
-
-  const fetchParcels = useCallback(async () => {
-    isFetchingParcelsRef.current = true;
-    try {
-      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
-      const todayKey = new Date().toISOString().split('T')[0];
-      await authorizedFetch(
-        `${API_BASE}/parcels?date=${todayKey}${hotelId ? '&hotelId=' + hotelId : ''}&t=${Date.now()}`
-      );
-    } catch (err) {
-      console.error('[Orders] Fetch parcels issue:', err);
-    } finally {
-      isFetchingParcelsRef.current = false;
-    }
-  }, []);
-
-  const fetchCaptainRequests = useCallback(async () => {
-    try {
-      const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
-      const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
-      const hotelParam = hotelId ? `?hotelId=${hotelId}` : '';
-      const res = await authorizedFetch(
-        `${API_BASE}/customer/active-captain-requests${hotelParam}${hotelParam ? '&' : '?'}t=${Date.now()}`
-      );
-      const data = await res.json();
-      if (data.success) {
-        setCaptainRequests(data.data || []);
-      }
-    } catch (err) {
-      console.error('[Orders] Fetch captain requests issue:', err);
-    }
-  }, []);
-
-  const syncOperationalState = useCallback(async () => {
-    try {
-      await Promise.all([
-        fetchTables(),
-        fetchOrders(),
-        fetchSales(),
-        fetchParcels(),
-        fetchCaptainRequests()
-      ]);
-    } catch (err) {
-      console.error('[Orders] Real-time sync issue:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchTables, fetchOrders, fetchSales, fetchParcels, fetchCaptainRequests]);
-
-  const syncTableState = useCallback(async () => {
-    try {
-      await Promise.all([fetchTables(), fetchOrders()]);
-    } catch (err) {
-      console.error('[Orders] Real-time table status sync issue:', err);
-    }
-  }, [fetchTables, fetchOrders]);
 
   useEffect(() => {
     const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
@@ -1259,7 +1308,7 @@ export default function OrdersPage() {
       if (!data || !data.jobId) return;
       clearAckTimeout(data.jobId);
       toast.error(
-        `❌ KOT printing failed for ${data.tableName || 'Table'}: ${data.message || 'Printer offline'}`,
+        `KOT printing failed for ${data.tableName || 'Table'}: ${data.message || 'Printer offline'}`,
         {
           id: `kot-fail-${data.jobId}`,
           style: { borderRadius: '10px', background: '#e11d48', color: '#fff' }
@@ -1368,8 +1417,8 @@ export default function OrdersPage() {
           body: JSON.stringify(kotData)
         });
 
-        const printData = await printRes.json();
-        if (!printData.success) {
+        const printData = await safeParseJson(printRes);
+        if (!printRes.ok || !printData.success) {
           if (printData.code === 'PRINTER_NOT_CONFIGURED' || printData.code === 'PRINTER_OFFLINE') {
             showPrinterErrorToast(printData.message, `kot-auto-fail-${order.id}`, navigate);
             printingKotIds.current.delete(order.id);
@@ -1379,7 +1428,7 @@ export default function OrdersPage() {
         }
 
         const jobId = printData.jobId;
-        startAckTimeout(jobId, 'KOT');
+        if (jobId) startAckTimeout(jobId, 'KOT');
 
         let localPrintSuccess = false;
         if (isLocalNetworkHost()) {
@@ -1392,7 +1441,7 @@ export default function OrdersPage() {
               body: JSON.stringify({ id: jobId, job_type: 'KOT', payload: kotData }),
               signal: controller.signal
             });
-            const localData = await localResponse.json();
+            const localData = await safeParseJson(localResponse);
             clearTimeout(timeoutId);
             if (localData.success) {
               localPrintSuccess = true;
@@ -1411,51 +1460,13 @@ export default function OrdersPage() {
       } catch (err) {
         console.error(`[Auto-KOT] Failed to auto-print order ${order.id}:`, err);
         printingKotIds.current.delete(order.id);
-        toast.error(`❌ Auto-print failed for ${order.table_name || 'order'}: ${err.message}`, {
+        toast.error(`Auto-print failed for ${order.table_name || 'order'}: ${err.message}`, {
           id: `kot-auto-fail-${order.id}`,
           style: { borderRadius: '10px', background: '#e11d48', color: '#fff' }
         });
       }
     });
   }, [orders, systemSettings, startAckTimeout, onPrintJobAcknowledgedLocal, syncOperationalState, navigate]);
-
-  const selectedTableLive = useMemo(() => {
-    if (!selectedTable) return null;
-    return tables.find((t) => String(t.id) === String(selectedTable.id)) || selectedTable;
-  }, [tables, selectedTable]);
-
-  const activeOrderForSelectedTable = useMemo(() => {
-    if (!selectedTableLive) return null;
-    return getTableFallbackOrder(selectedTableLive);
-  }, [selectedTableLive, getTableFallbackOrder]);
-
-  const [checkoutOrder, setCheckoutOrder] = useState(null);
-  const [eBillModalData, setEBillModalData] = useState(null);
-  const [menuViewMode, setMenuViewMode] = useState('table');
-
-  const billingTotals = useMemo(() => {
-    if (!checkoutOrder) {
-      return { subtotal: 0, cgst: 0, sgst: 0, serviceCharge: 0, grandTotal: 0 };
-    }
-
-    const itemsTotal = (checkoutOrder.items || []).reduce(
-      (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0),
-      0
-    );
-
-    const subtotal = Number(checkoutOrder.subtotal) > 0 ? Number(checkoutOrder.subtotal) : itemsTotal;
-    const cgst = Number(checkoutOrder.cgst) > 0 ? Number(checkoutOrder.cgst) : (subtotal * cgstRate) / 100;
-    const sgst = Number(checkoutOrder.sgst) > 0 ? Number(checkoutOrder.sgst) : (subtotal * sgstRate) / 100;
-    const serviceCharge = (subtotal * serviceChargeRate) / 100;
-
-    const calculatedGrandTotal = subtotal + cgst + sgst + serviceCharge;
-    const grandTotal =
-      Number(checkoutOrder.grand_total) > 0 && Number(checkoutOrder.cgst) > 0
-        ? Number(checkoutOrder.grand_total)
-        : calculatedGrandTotal;
-
-    return { subtotal, cgst, sgst, serviceCharge, grandTotal };
-  }, [checkoutOrder, cgstRate, sgstRate, serviceChargeRate]);
 
   useEffect(() => {
     if (!selectedTableLive) {
@@ -1524,7 +1535,7 @@ export default function OrdersPage() {
   }, [tablesByArea]);
 
   const handleCompletePayment = async (orderId, shouldClose = true) => {
-    if (!orderId) return;
+    if (!orderId) return false;
     try {
       const adminUser = JSON.parse(localStorage.getItem('mejwani_admin_user') || '{}');
       const hotelId = adminUser.hotel_id || adminUser.hotelId || localStorage.getItem('mejwani_hotel_id') || '';
@@ -1578,11 +1589,10 @@ export default function OrdersPage() {
           socket.emit('table-released', { hotelId, tableId: targetTableId });
           socket.emit('table-updated', { hotelId, tableId: targetTableId, status: 'available' });
         }
-        toast.success('✅ Table settled & marked AVAILABLE.');
-        await fetchOrders();
-        await fetchTables();
+        toast.success('Table settled and marked AVAILABLE.');
+        await Promise.all([fetchOrders(), fetchTables()]);
         fetchSales();
-        return;
+        return true;
       }
 
       const res = await authorizedFetch(`${API_BASE}/orders/pay/${orderId}?hotelId=${hotelId}`, {
@@ -1590,8 +1600,8 @@ export default function OrdersPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ paymentMode: selectedPaymentMode || 'CASH' })
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = await safeParseJson(res);
+      if (res.ok && data.success) {
         if (targetTableId != null) {
           await authorizedFetch(`${API_BASE}/tables/${targetTableId}/release?hotelId=${hotelId}`, {
             method: 'POST',
@@ -1602,22 +1612,22 @@ export default function OrdersPage() {
           socket.emit('table-released', { hotelId, tableId: targetTableId, orderId });
           socket.emit('table-updated', { hotelId, tableId: targetTableId, status: 'available' });
         }
-        toast.success('✅ Bill settled & table is now AVAILABLE.');
-        await fetchOrders();
-        await fetchTables();
+        toast.success('Bill settled and table is now AVAILABLE.');
+        await Promise.all([fetchOrders(), fetchTables()]);
         fetchSales();
+        return true;
       } else {
         toast.error(data.message || 'Failed to complete payment.');
-        await fetchOrders();
-        await fetchTables();
+        await Promise.all([fetchOrders(), fetchTables()]);
         fetchSales();
+        return false;
       }
     } catch (err) {
       console.error('Failed to checkout:', err);
       toast.error('Failed to connect to server to complete payment.');
-      await fetchOrders();
-      await fetchTables();
+      await Promise.all([fetchOrders(), fetchTables()]);
       fetchSales();
+      return false;
     }
   };
 
@@ -1654,13 +1664,14 @@ export default function OrdersPage() {
       grandTotal: grandTotalValue
     };
 
+    setSelectedTable(null);
+    setEBillModalData(billSnapshot);
+
     if (String(order.status || '').toUpperCase() !== 'COMPLETED') {
       await handleCompletePayment(order.id, false);
     }
 
-    setSelectedTable(null);
-    setEBillModalData(billSnapshot);
-    toast.success('✅ Payment settled & E-Bill generated!');
+    toast.success('Payment settled and E-Bill generated.');
   };
 
   const handleCancelBill = async (orderId) => {
@@ -1675,23 +1686,21 @@ export default function OrdersPage() {
         headers: { 'Content-Type': 'application/json' }
       });
 
-      const rawText = await res.text();
-      const data = rawText ? JSON.parse(rawText) : {};
+      const data = await safeParseJson(res);
 
       if (res.ok && (data.success || data.message === 'Order cancelled')) {
-        toast.success('✅ Order cancelled successfully.', {
+        toast.success('Order cancelled successfully.', {
           style: { borderRadius: '10px', background: '#333', color: '#fff' }
         });
         setSelectedTable(null);
-        await fetchOrders();
-        await fetchTables();
+        await Promise.all([fetchOrders(), fetchTables()]);
         fetchSales();
       } else {
         throw new Error(data.message || `Server returned ${res.status} (${res.statusText})`);
       }
     } catch (err) {
       console.error('[Orders] handleCancelBill failed:', err);
-      toast.error(`❌ ${err.message}`, {
+      toast.error(err.message, {
         style: { borderRadius: '10px', background: '#e11d48', color: '#fff' }
       });
     }
@@ -1809,8 +1818,8 @@ export default function OrdersPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(billData)
       });
-      const data = await response.json();
-      if (!data.success) {
+      const data = await safeParseJson(response);
+      if (!response.ok || !data.success) {
         if (data.code === 'PRINTER_NOT_CONFIGURED' || data.code === 'PRINTER_OFFLINE') {
           openBrowserPrintReceipt(billData);
           return;
@@ -1819,7 +1828,7 @@ export default function OrdersPage() {
       }
 
       const jobId = data.jobId;
-      startAckTimeout(jobId, 'BILL');
+      if (jobId) startAckTimeout(jobId, 'BILL');
 
       if (isLocalNetworkHost()) {
         try {
@@ -1831,7 +1840,7 @@ export default function OrdersPage() {
             body: JSON.stringify({ id: jobId, job_type: 'BILL', payload: billData }),
             signal: controller.signal
           });
-          const localData = await localResponse.json();
+          const localData = await safeParseJson(localResponse);
           clearTimeout(timeoutId);
           if (localData.success) {
             onPrintJobAcknowledgedLocal(jobId, tableName, 'BILL');
@@ -1868,10 +1877,10 @@ export default function OrdersPage() {
     const grandTotalValue = subtotalValue + cgstValue + sgstValue + serviceChargeValue;
 
     const billData = {
-      hotelName: systemSettings.branding.name,
-      address: systemSettings.branding.address,
-      phone: systemSettings.branding.phone,
-      gstNumber: systemSettings.billing.gstNumber,
+      hotelName: systemSettings?.branding?.name || 'MEJWANI',
+      address: systemSettings?.branding?.address || '',
+      phone: systemSettings?.branding?.phone || '',
+      gstNumber: systemSettings?.billing?.gstNumber || '',
       tableNumber: `${table.table_code || table.table_name} (${table.section_name || 'MAIN'})`,
       cashierName: 'Counter',
       captainName: order.captain_name || 'ADMIN',
@@ -1886,7 +1895,7 @@ export default function OrdersPage() {
       cgstRate,
       sgstRate,
       serviceChargeRate,
-      currencySymbol: systemSettings.billing.currencySymbol
+      currencySymbol: systemSettings?.billing?.currencySymbol || '₹'
     };
 
     handleThermalPrintDirect(billData);
@@ -1906,8 +1915,8 @@ export default function OrdersPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tableId: table.id })
       });
-      const data = await res.json();
-      if (!data.success) {
+      const data = await safeParseJson(res);
+      if (!res.ok || !data.success) {
         throw new Error(data.message || 'Failed to reject request on backend.');
       }
       toast.success('Request rejected');
@@ -2802,7 +2811,7 @@ export default function OrdersPage() {
                                               </span>
                                               {item.note && (
                                                 <span className="text-[9px] text-amber-500 italic block mt-0.5">
-                                                  * Note: {item.note}
+                                                  - Note: {item.note}
                                                 </span>
                                               )}
                                             </td>
@@ -3061,7 +3070,7 @@ export default function OrdersPage() {
               </div>
 
               <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
-                {eBillModalData.items.map((item, idx) => (
+                {(eBillModalData.items || []).map((item, idx) => (
                   <div key={idx} className="flex justify-between items-center font-bold text-slate-700 dark:text-slate-200">
                     <div>
                       <span>{item.name}</span>
@@ -3099,9 +3108,9 @@ export default function OrdersPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    const encodedData = window.btoa(unescape(encodeURIComponent(JSON.stringify(eBillModalData))));
+                    const encodedData = encodeEBillPayload(eBillModalData);
                     const eBillUrl = `${window.location.origin}/#/ebill?data=${encodedData}`;
-                    const msg = `*${eBillModalData.hotelName} - Digital E-Bill* 🧾\n\nInvoice: ${eBillModalData.invoiceId}\nTable: ${eBillModalData.tableName}\nTotal Paid: *₹${eBillModalData.grandTotal.toFixed(2)}*\n\n👇 View & Download your E-Bill:\n${eBillUrl}\n\nThank you for dining with us!`;
+                    const msg = `*${eBillModalData.hotelName} - Digital E-Bill*\n\nInvoice: ${eBillModalData.invoiceId}\nTable: ${eBillModalData.tableName}\nTotal Paid: *₹${Number(eBillModalData.grandTotal || 0).toFixed(2)}*\n\nView and download your E-Bill:\n${eBillUrl}\n\nThank you for dining with us!`;
                     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
                   }}
                   className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer"
@@ -3118,7 +3127,7 @@ export default function OrdersPage() {
                       cgstRate,
                       sgstRate,
                       serviceChargeRate,
-                      currencySymbol: systemSettings.billing.currencySymbol
+                      currencySymbol: systemSettings?.billing?.currencySymbol || '₹'
                     })
                   }
                   className="px-5 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer"
