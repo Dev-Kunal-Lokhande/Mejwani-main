@@ -89,22 +89,69 @@ export default function AdminLayout({ children }) {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  const [isConnected, setIsConnected] = useState(socket.connected);
+  const [socketConnected, setSocketConnected] = useState(Boolean(socket.connected));
+  const [apiReachable, setApiReachable] = useState(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
 
   useEffect(() => {
-    const onConnect = () => setIsConnected(true);
-    const onDisconnect = () => setIsConnected(false);
+    const onConnect = () => setSocketConnected(true);
+    const onDisconnect = () => setSocketConnected(false);
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
+    setSocketConnected(Boolean(socket.connected));
 
-    setIsConnected(socket.connected);
+    const checkBackendReachability = async () => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        setApiReachable(false);
+        return;
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      try {
+        const token =
+          localStorage.getItem('mejwani_admin_jwt') ||
+          localStorage.getItem('mejwani_admin_token') ||
+          localStorage.getItem('mejwani_token') ||
+          '';
+
+        const resp = await fetch(`${API_BASE}/admin/system-settings`, {
+          cache: 'no-store',
+          signal: controller.signal,
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+
+        // Any HTTP response (200, 401, 403, 404) confirms the backend server is reachable
+        setApiReachable(resp.status > 0);
+      } catch {
+        setApiReachable(false);
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+
+    checkBackendReachability();
+    const intervalId = setInterval(checkBackendReachability, 25000);
+
+    const handleBrowserOnline = () => checkBackendReachability();
+    const handleBrowserOffline = () => setApiReachable(false);
+
+    window.addEventListener('online', handleBrowserOnline);
+    window.addEventListener('offline', handleBrowserOffline);
 
     return () => {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
+      clearInterval(intervalId);
+      window.removeEventListener('online', handleBrowserOnline);
+      window.removeEventListener('offline', handleBrowserOffline);
     };
   }, []);
+
+  const isConnected = socketConnected || apiReachable;
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -311,7 +358,13 @@ export default function AdminLayout({ children }) {
                   ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
                   : 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400 animate-pulse'
               }`}
-              title={isConnected ? 'Live Sync Active' : 'Live Sync Reconnecting...'}
+              title={
+                socketConnected
+                  ? 'Live Socket Sync Active'
+                  : apiReachable
+                    ? 'Server Online (API/Polling Sync Active)'
+                    : 'Server Offline / Reconnecting...'
+              }
             >
               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isConnected ? 'bg-emerald-500' : 'bg-rose-500'}`} />
               <span className="hidden sm:inline">{isConnected ? 'Live' : 'Offline'}</span>

@@ -25,10 +25,13 @@ const getAuthToken = () => {
 
 const token = getAuthToken();
 
+const shouldConnectSocket = isLocalHost || hasExplicitSocketUrl;
+
 const socket = io(SOCKET_URL, {
   transports: ['polling', 'websocket'],
-  reconnection: isLocalHost || hasExplicitSocketUrl,
-  reconnectionAttempts: isLocalHost || hasExplicitSocketUrl ? Infinity : 0,
+  autoConnect: shouldConnectSocket,
+  reconnection: shouldConnectSocket,
+  reconnectionAttempts: shouldConnectSocket ? Infinity : 0,
   reconnectionDelay: 3000,
   auth: token ? { token } : undefined,
 });
@@ -40,6 +43,9 @@ const originalEmit = socket.emit;
 socket.emit = function (event, ...args) {
   if (event === 'join-hotel-room') {
     lastJoinedRoomParam = args[0];
+    if (!shouldConnectSocket) {
+      return this;
+    }
     console.log('[SOCKET] Joined room');
     console.log('[SOCKET] Room name:', args[0]);
   }
@@ -65,7 +71,10 @@ socket.on('connect', () => {
 
 socket.on('connect_error', (error) => {
   const msg = String(error?.message || '');
-  if (!isLocalHost && !hasExplicitSocketUrl && (msg.includes('403') || msg.includes('xhr poll error'))) {
+  if (
+    !shouldConnectSocket &&
+    (msg.includes('403') || msg.includes('xhr poll error') || msg.includes('timeout'))
+  ) {
     socket.io.opts.reconnection = false;
     socket.disconnect();
     return;
