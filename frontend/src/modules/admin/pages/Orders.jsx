@@ -25,6 +25,13 @@ import axios from 'axios';
 import DiningTimer from '../../../shared/components/DiningTimer';
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from '../../../utils/dateFormatter';
 
+const UPI_APP_OPTIONS = [
+  { id: 'GPAY', label: 'GPay', handle: 'demo.gpay@okicici' },
+  { id: 'PHONEPE', label: 'PhonePe', handle: 'demo.phonepe@ybl' },
+  { id: 'PAYTM', label: 'Paytm', handle: 'demo.paytm@paytm' },
+  { id: 'BHIM', label: 'BHIM', handle: 'demo.bhim@upi' }
+];
+
 const isLocalNetworkHost = () => {
   const host = window.location.hostname;
   return (
@@ -58,7 +65,9 @@ const encodeEBillPayload = (obj) => {
   return encodeURIComponent(window.btoa(binary));
 };
 
-// Generates a clean scannable-style matrix pattern from text for demo QR display
+const iSafe = (r, c) => (r * c) % 97;
+
+// Generates a clean matrix pattern from text for demo QR display
 const buildDemoQrMatrix = (text, size = 21) => {
   const matrix = Array.from({ length: size }, () => Array(size).fill(false));
 
@@ -102,37 +111,52 @@ const buildDemoQrMatrix = (text, size = 21) => {
   return matrix;
 };
 
-const iSafe = (r, c) => (r * c) % 97;
-
-function DemoQrBox({ value, size = 136 }) {
+function DemoQrBox({ value, size = 120, invoiceLabel = '', amountLabel = '' }) {
   const matrix = useMemo(() => buildDemoQrMatrix(value, 21), [value]);
   const cellSize = size / matrix.length;
 
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox={`0 0 ${size} ${size}`}
-      className="bg-white rounded-xl block"
-      role="img"
-      aria-label="Demo Razorpay UPI QR Code"
-    >
-      <rect x="0" y="0" width={size} height={size} fill="#ffffff" />
-      {matrix.map((row, rIdx) =>
-        row.map((isDark, cIdx) =>
-          isDark ? (
-            <rect
-              key={`${rIdx}-${cIdx}`}
-              x={cIdx * cellSize}
-              y={rIdx * cellSize}
-              width={cellSize + 0.35}
-              height={cellSize + 0.35}
-              fill="#0f172a"
-            />
-          ) : null
-        )
+    <div className="flex flex-col items-center justify-center bg-white p-2.5 rounded-2xl border border-slate-200 shadow-sm">
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="bg-white rounded-xl block"
+        role="img"
+        aria-label="Demo UPI QR Code"
+      >
+        <rect x="0" y="0" width={size} height={size} fill="#ffffff" />
+        {matrix.map((row, rIdx) =>
+          row.map((isDark, cIdx) =>
+            isDark ? (
+              <rect
+                key={`${rIdx}-${cIdx}`}
+                x={cIdx * cellSize}
+                y={rIdx * cellSize}
+                width={cellSize + 0.35}
+                height={cellSize + 0.35}
+                fill="#0f172a"
+              />
+            ) : null
+          )
+        )}
+      </svg>
+
+      {(invoiceLabel || amountLabel) && (
+        <div className="mt-2 pt-1.5 border-t border-dashed border-slate-200 w-full text-center">
+          {invoiceLabel && (
+            <p className="text-[10px] font-black tracking-wider text-slate-800 uppercase">
+              {invoiceLabel}
+            </p>
+          )}
+          {amountLabel && (
+            <p className="text-[11px] font-extrabold text-[#ff6b00] mt-0.5">
+              {amountLabel}
+            </p>
+          )}
+        </div>
       )}
-    </svg>
+    </div>
   );
 }
 
@@ -192,6 +216,7 @@ export default function OrdersPage() {
   const recentlySettledTableIdsRef = useRef(new Set());
 
   const [upiPaymentState, setUpiPaymentState] = useState('IDLE'); // 'IDLE' | 'WAITING' | 'SUCCESS'
+  const [selectedUpiApp, setSelectedUpiApp] = useState('GPAY');
   const upiSettleTimerRef = useRef(null);
 
   const markRecentlySettled = useCallback((orderId, tableId) => {
@@ -815,12 +840,17 @@ export default function OrdersPage() {
     return { subtotal, cgst, sgst, serviceCharge, grandTotal };
   }, [checkoutOrder, cgstRate, sgstRate, serviceChargeRate]);
 
+  const activeUpiAppOption = useMemo(
+    () => UPI_APP_OPTIONS.find((app) => app.id === selectedUpiApp) || UPI_APP_OPTIONS[0],
+    [selectedUpiApp]
+  );
+
   const demoUpiQrPayload = useMemo(() => {
     if (!checkoutOrder) return '';
     const amountStr = Number(billingTotals.grandTotal || 0).toFixed(2);
     const merchantName = encodeURIComponent(systemSettings?.branding?.name || 'MEJWANI DEMO');
-    return `upi://pay?pa=demo.razorpay@okaxis&pn=${merchantName}&am=${amountStr}&cu=INR&tn=INV-${checkoutOrder.id}`;
-  }, [checkoutOrder, billingTotals.grandTotal, systemSettings]);
+    return `upi://pay?pa=${activeUpiAppOption.handle}&pn=${merchantName}&am=${amountStr}&cu=INR&tn=INV-${checkoutOrder.id}-${activeUpiAppOption.id}`;
+  }, [checkoutOrder, billingTotals.grandTotal, systemSettings, activeUpiAppOption]);
 
   const handleSubmitAdditionalItems = async (options = {}) => {
     if (!activeOrderForSelectedTable || !selectedTableLive) return;
@@ -3080,7 +3110,7 @@ export default function OrdersPage() {
                               <div className="flex items-center justify-between gap-2">
                                 <div>
                                   <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                                    Demo Razorpay UPI QR
+                                    Demo UPI QR · {activeUpiAppOption.label}
                                   </p>
                                   <p className="text-xs font-extrabold text-slate-800 dark:text-white">
                                     INV-{checkoutOrder.id} · {formatCurrency(billingTotals.grandTotal)}
@@ -3093,18 +3123,43 @@ export default function OrdersPage() {
                                       : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
                                   }`}
                                 >
-                                  {upiPaymentState === 'SUCCESS' ? 'Payment successful' : 'Waiting for scan'}
+                                  {upiPaymentState === 'SUCCESS' ? 'Payment successful' : 'Demo QR Ready'}
                                 </span>
                               </div>
 
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {UPI_APP_OPTIONS.map((app) => {
+                                  const isSelected = selectedUpiApp === app.id;
+                                  return (
+                                    <button
+                                      type="button"
+                                      key={app.id}
+                                      onClick={() => setSelectedUpiApp(app.id)}
+                                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                                        isSelected
+                                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                                          : 'bg-white dark:bg-white/5 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10 hover:bg-slate-100'
+                                      }`}
+                                    >
+                                      {app.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
                               <div className="flex flex-col sm:flex-row items-center gap-4">
-                                <div className="p-2.5 bg-white rounded-2xl border border-slate-200 shadow-sm flex-shrink-0">
-                                  <DemoQrBox value={demoUpiQrPayload} size={124} />
+                                <div className="flex-shrink-0">
+                                  <DemoQrBox
+                                    value={demoUpiQrPayload}
+                                    size={120}
+                                    invoiceLabel={`INV-${checkoutOrder.id} · ${activeUpiAppOption.label}`}
+                                    amountLabel={formatCurrency(billingTotals.grandTotal)}
+                                  />
                                 </div>
 
                                 <div className="flex-1 space-y-2.5 w-full">
                                   <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 leading-relaxed">
-                                    Demo Razorpay QR generated for this invoice. After scan completion, it shows Payment successful and auto-settles.
+                                    Selected {activeUpiAppOption.label} demo QR ({activeUpiAppOption.handle}). Click below to mark payment successful and auto-settle.
                                   </p>
                                   <button
                                     type="button"
@@ -3114,7 +3169,7 @@ export default function OrdersPage() {
                                   >
                                     {upiPaymentState === 'SUCCESS'
                                       ? 'Payment successful - Settling...'
-                                      : 'Simulate Scan & Pay'}
+                                      : 'Simulate Payment Success'}
                                   </button>
                                 </div>
                               </div>
