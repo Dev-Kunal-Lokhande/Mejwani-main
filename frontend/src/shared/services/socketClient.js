@@ -1,12 +1,32 @@
 import { io } from 'socket.io-client';
 import { BACKEND_BASE } from './apiBase';
 
-// Socket.io runs on port 9001 (separate from REST API on 8080/5000)
-const SOCKET_URL = BACKEND_BASE.replace(/:(\d+)$/, ':9001');
+const isLocalHost =
+  typeof window !== 'undefined' &&
+  ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+// Local development uses port 9001 when BACKEND_BASE has a port;
+// production/hosted URLs use VITE_SOCKET_URL if configured, otherwise BACKEND_BASE.
+const SOCKET_URL =
+  import.meta.env?.VITE_SOCKET_URL ||
+  (isLocalHost ? BACKEND_BASE.replace(/:(\d+)$/, ':9001') : BACKEND_BASE);
+
+const getAuthToken = () => {
+  if (typeof localStorage === 'undefined') return '';
+  return (
+    localStorage.getItem('mejwani_token') ||
+    localStorage.getItem('token') ||
+    localStorage.getItem('accessToken') ||
+    ''
+  );
+};
+
+const token = getAuthToken();
 
 const socket = io(SOCKET_URL, {
   transports: ['polling', 'websocket'],
   reconnectionAttempts: Infinity,
+  auth: token ? { token } : undefined,
 });
 
 // Cache the last joined room parameters
@@ -23,9 +43,14 @@ socket.emit = function (event, ...args) {
 };
 
 socket.on('connect', () => {
+  const latestToken = getAuthToken();
+  if (latestToken) {
+    socket.auth = { token: latestToken };
+  }
+
   console.log('[SOCKET] Connected');
   console.log('[SOCKET] Socket ID:', socket.id);
-  console.log('[SOCKET] Connected URL:', BACKEND_BASE);
+  console.log('[SOCKET] Connected URL:', SOCKET_URL);
 
   // Auto-rejoin the hotel room on reconnect/connect
   if (lastJoinedRoomParam) {
