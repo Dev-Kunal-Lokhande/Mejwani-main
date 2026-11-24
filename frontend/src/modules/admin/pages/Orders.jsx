@@ -3159,7 +3159,7 @@ export default function OrdersPage() {
 
                                 <div className="flex-1 space-y-2.5 w-full">
                                   <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 leading-relaxed">
-                                    Selected {activeUpiAppOption.label} demo QR ({activeUpiAppOption.handle}). Click below to mark payment successful and auto-settle.
+                                    Selected {activeUpiAppOption.label}  QR ({activeUpiAppOption.handle}). Click below to mark payment successful and auto-settle.
                                   </p>
                                   <button
                                     type="button"
